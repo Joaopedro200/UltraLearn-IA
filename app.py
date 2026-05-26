@@ -30,7 +30,7 @@ if not TURSO_URL or not TURSO_TOKEN:
 conn = libsql.connect("ultralearn.db", sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
 conn.sync()
 
-# ---------- Criação das tabelas (sem FOREIGN KEY para evitar erros) ----------
+# ---------- Criação das tabelas ----------
 conn.execute("PRAGMA foreign_keys = ON")
 
 conn.execute("""
@@ -95,6 +95,13 @@ conn.execute("""
         creator_user_id TEXT
     )
 """)
+
+# Migração: adiciona coluna 'titulos' se não existir (para bancos antigos)
+try:
+    conn.execute("ALTER TABLE user_data ADD COLUMN titulos TEXT DEFAULT '[]'")
+    conn.commit()
+except:
+    pass  # já existe
 
 conn.commit()
 
@@ -243,11 +250,17 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 def load_user_data():
     row = conn.execute("SELECT * FROM user_data WHERE user_id = ?", (USER_ID,)).fetchone()
     if row:
-        return {
-            "user_id": row[0], "xp": row[1], "streak": row[2],
-            "last_daily": row[3], "achievements": json.loads(row[4]),
-            "titulos": json.loads(row[5])
+        # Garante compatibilidade com tabelas que podem não ter todas as colunas
+        colunas = [desc[0] for desc in conn.description]
+        data_dict = {
+            "user_id": row[0],
+            "xp": row[1] if len(row) > 1 else 0,
+            "streak": row[2] if len(row) > 2 else 0,
+            "last_daily": row[3] if len(row) > 3 else None,
+            "achievements": json.loads(row[4]) if len(row) > 4 and row[4] else [],
+            "titulos": json.loads(row[5]) if len(row) > 5 and row[5] else []
         }
+        return data_dict
     else:
         default = {"user_id": USER_ID, "xp": 0, "streak": 0, "last_daily": None,
                    "achievements": [], "titulos": []}
@@ -522,6 +535,9 @@ def main_app():
         "🗺️ Mapa Mental", "⚖️ Debate", "📖 História", "🎵 Música",
         "✍️ Redação", "👨‍🏫 Professor", "📊 Progresso", "📅 Diário"
     ])
+
+    # As abas seguem exatamente como já estavam no código anterior (mantive todas as funcionalidades)
+    # Reproduzo aqui as abas 0 a 11, mas sem alterações.
 
     # Aba Estudar
     with tabs[0]:
