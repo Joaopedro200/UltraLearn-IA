@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Titanium Edition com LOGIN e RANKING GLOBAL (corrigido)
+UltraLearn IA – Titanium Edition com LOGIN PERSISTENTE (cookies) e RANKING GLOBAL
 """
 import streamlit as st
-import json, os, random, io, base64, hashlib
+import json, os, random, io, base64, hashlib, uuid
 from datetime import datetime, timedelta, date
 from groq import Groq
 from gtts import gTTS
@@ -16,9 +16,15 @@ from PIL import Image
 import wikipedia
 import plotly.express as px
 import pandas as pd
+from streamlit_cookies_manager import CookieManager
 
 # ---------- Configuração da página ----------
 st.set_page_config(page_title="UltraLearn IA", page_icon="🧠", layout="centered")
+
+# ---------- Cookies ----------
+cookies = CookieManager()
+if not cookies.ready():
+    st.stop()
 
 # ---------- Conexão com Turso ----------
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
@@ -96,7 +102,15 @@ conn.execute("""
     )
 """)
 
-# Migração: adiciona coluna 'titulos' se não existir (para bancos antigos)
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires TEXT NOT NULL
+    )
+""")
+
+# Migrações
 try:
     conn.execute("ALTER TABLE user_data ADD COLUMN titulos TEXT DEFAULT '[]'")
     conn.commit()
@@ -129,6 +143,30 @@ def login_usuario(user_id, password):
 
 def user_exists(user_id):
     return conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone() is not None
+
+def gerar_token(user_id):
+    """Gera um token único e salva no banco com validade de 30 dias."""
+    token = str(uuid.uuid4())
+    expires = (datetime.now() + timedelta(days=30)).isoformat()
+    conn.execute("INSERT INTO auth_tokens (token, user_id, expires) VALUES (?, ?, ?)", (token, user_id, expires))
+    conn.commit()
+    return token
+
+def validar_token(token):
+    """Retorna o user_id se o token for válido e não expirado, ou None."""
+    row = conn.execute("SELECT user_id, expires FROM auth_tokens WHERE token = ?", (token,)).fetchone()
+    if not row:
+        return None
+    user_id, expires = row
+    if datetime.fromisoformat(expires) < datetime.now():
+        conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
+        conn.commit()
+        return None
+    return user_id
+
+def remover_token(token):
+    conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
+    conn.commit()
 
 # ---------- CSS customizado ----------
 def inject_css(theme="dark", font_size=16, daltonic=None):
@@ -187,11 +225,23 @@ def inject_css(theme="dark", font_size=16, daltonic=None):
     </style>
     """, unsafe_allow_html=True)
 
-# ---------- Estados da sessão ----------
+# ---------- Verificação de cookie persistente ----------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "user_id" not in st.session_state:
     st.session_state.user_id = None
+
+if not st.session_state.logged_in:
+    cookie_token = cookies.get("ultralearn_token")
+    if cookie_token:
+        user_id = validar_token(cookie_token)
+        if user_id:
+            st.session_state.logged_in = True
+            st.session_state.user_id = user_id
+            cookies["ultralearn_token"] = cookie_token
+            cookies.save()
+        else:
+            cookies["ultralearn_token"] = ""
+            cookies.save()
 
 # ---------- Tela de login ----------
 def tela_login():
@@ -203,12 +253,17 @@ def tela_login():
     with tab1:
         user = st.text_input("Usuário", key="login_user")
         senha = st.text_input("Senha", type="password", key="login_pass")
+        lembrar = st.checkbox("Lembrar de mim (30 dias)", value=True)
         if st.button("Entrar"):
             if not user or not senha:
                 st.warning("Preencha todos os campos.")
             elif login_usuario(user, senha):
                 st.session_state.logged_in = True
                 st.session_state.user_id = user
+                if lembrar:
+                    token = gerar_token(user)
+                    cookies["ultralearn_token"] = token
+                    cookies.save()
                 st.success(f"Bem-vindo, {user}!")
                 st.rerun()
             else:
@@ -232,7 +287,7 @@ def tela_login():
                 else:
                     st.error("Erro ao criar conta.")
 
-# ---------- Inicialização (apenas após login) ----------
+# ---------- Inicialização ----------
 if not st.session_state.logged_in:
     inject_css("dark", 16)
     tela_login()
@@ -404,28 +459,24 @@ def gen_mapa_mental(topic):
     if cont.startswith("```"): cont = cont[cont.find("\n"):].rstrip("```").strip()
     try:
         data = json.loads(cont)
-        # Normaliza nós: se forem dicionários, extrai 'name' ou o primeiro valor string
         nodes = data.get("nodes", [])
         normalized_nodes = []
         for n in nodes:
             if isinstance(n, str):
                 normalized_nodes.append(n)
             elif isinstance(n, dict):
-                # Tenta pegar a chave 'name', 'label', 'id' ou o primeiro valor string
                 for key in ("name", "label", "id"):
                     if key in n and isinstance(n[key], str):
                         normalized_nodes.append(n[key])
                         break
                 else:
-                    # Pega o primeiro valor string do dicionário
                     first_str = next((v for v in n.values() if isinstance(v, str)), None)
                     if first_str:
                         normalized_nodes.append(first_str)
                     else:
-                        normalized_nodes.append(str(n))  # fallback
+                        normalized_nodes.append(str(n))
             else:
                 normalized_nodes.append(str(n))
-        # Normaliza arestas: cada aresta deve ser uma lista de duas strings
         edges = data.get("edges", [])
         normalized_edges = []
         for e in edges:
@@ -521,6 +572,12 @@ def main_app():
         st.markdown(f"### {avatar} {USER_ID}")
         st.write(bio)
         if st.button("Sair"):
+            # Remove cookie e limpa sessão
+            cookie_token = cookies.get("ultralearn_token")
+            if cookie_token:
+                remover_token(cookie_token)
+            cookies["ultralearn_token"] = ""
+            cookies.save()
             st.session_state.logged_in = False
             st.session_state.user_id = None
             st.rerun()
@@ -665,7 +722,7 @@ def main_app():
         if st.session_state.primata_explanation:
             st.markdown(f'<div class="primata-box">{st.session_state.primata_explanation}</div>', unsafe_allow_html=True)
 
-    # Aba Mapa Mental (com tratamento de erro melhorado)
+    # Aba Mapa Mental
     with tabs[4]:
         st.subheader("🗺️ Mapa Mental")
         mapa_topic = st.text_input("Tópico:", key="mapa")
@@ -682,8 +739,7 @@ def main_app():
                             g.edge(str(edge[0]).strip(), str(edge[1]).strip())
                     st.graphviz_chart(g)
                 else:
-                    st.error("Não foi possível gerar o mapa mental. Tente outro tópico.")
-                    st.info("A IA pode ter retornado um formato inválido.")
+                    st.error("Não foi possível gerar o mapa mental.")
 
     # Aba Debate
     with tabs[5]:
@@ -766,7 +822,7 @@ def main_app():
                     st.session_state.prof_idx += 1; st.rerun()
             else: st.success("Aula concluída!")
 
-    # Aba Progresso (com ranking global e correção)
+    # Aba Progresso
     with tabs[10]:
         st.subheader("📊 Seu Progresso")
         data = load_user_data()
@@ -784,7 +840,6 @@ def main_app():
             fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
             st.plotly_chart(fig)
 
-        # Ranking geral (todos os usuários, ordenados por XP total)
         ranking = conn.execute("""
             SELECT u.user_id, COALESCE(SUM(xp.xp_gained), 0) as total_xp
             FROM users u
