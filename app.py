@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Titanium Edition com LOGIN PERSISTENTE, RANKING LATERAL e CORREÇÕES
+UltraLearn IA – Premium Edition (Visual incrível + todas as funcionalidades)
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid
@@ -110,7 +110,7 @@ conn.execute("""
     )
 """)
 
-# Migrações
+# Migração: adiciona coluna 'titulos' se não existir
 try:
     conn.execute("ALTER TABLE user_data ADD COLUMN titulos TEXT DEFAULT '[]'")
     conn.commit()
@@ -166,60 +166,226 @@ def remover_token(token):
     conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
     conn.commit()
 
-# ---------- CSS customizado ----------
+# ---------- CSS Mega Premium (11 temas) ----------
 def inject_css(theme="dark", font_size=16, daltonic=None):
-    if theme == "dark":
-        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
-            "#0f172a", "#e2e8f0", "#1e293b", "#fef3c7", "#78350f",
-            "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "linear-gradient(135deg, #3b82f6, #2563eb)"
-        )
-    elif theme == "light":
-        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
-            "#ffffff", "#1e293b", "#f8fafc", "#fff7ed", "#7c2d12",
-            "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)", "linear-gradient(135deg, #2563eb, #1d4ed8)"
-        )
-    elif theme == "natal":
-        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
-            "#1a3c34", "#e8f5e9", "#2d5a4b", "#ffebee", "#b71c1c",
-            "linear-gradient(135deg, #b71c1c 0%, #d32f2f 100%)", "linear-gradient(135deg, #c62828, #b71c1c)"
-        )
-    elif theme == "halloween":
-        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
-            "#1a1a2e", "#f0e6d3", "#2e2e4a", "#ffb74d", "#4a1e1e",
-            "linear-gradient(135deg, #4a1e1e 0%, #7b2d26 100%)", "linear-gradient(135deg, #e65100, #bf360c)"
-        )
-    else:
-        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
-            "#0f172a", "#e2e8f0", "#1e293b", "#fef3c7", "#78350f",
-            "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "linear-gradient(135deg, #3b82f6, #2563eb)"
-        )
+    themes = {
+        "dark": {
+            "bg_main": "#0f172a", "text_color": "#e2e8f0", "card_bg": "rgba(30,41,59,0.8)",
+            "primata_bg": "#fef3c7", "primata_text": "#78350f",
+            "header_bg": "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+            "button_bg": "linear-gradient(135deg, #3b82f6, #2563eb)", "accent": "#3b82f6"
+        },
+        "light": {
+            "bg_main": "#ffffff", "text_color": "#1e293b", "card_bg": "rgba(248,250,252,0.9)",
+            "primata_bg": "#fff7ed", "primata_text": "#7c2d12",
+            "header_bg": "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+            "button_bg": "linear-gradient(135deg, #2563eb, #1d4ed8)", "accent": "#2563eb"
+        },
+        "ocean": {
+            "bg_main": "#0c4a6e", "text_color": "#e0f2fe", "card_bg": "rgba(12,74,110,0.8)",
+            "primata_bg": "#d1fae5", "primata_text": "#065f46",
+            "header_bg": "linear-gradient(135deg, #0891b2 0%, #0c4a6e 100%)",
+            "button_bg": "linear-gradient(135deg, #22d3ee, #0891b2)", "accent": "#22d3ee"
+        },
+        "sunset": {
+            "bg_main": "#4a1942", "text_color": "#ffe4e6", "card_bg": "rgba(74,25,66,0.8)",
+            "primata_bg": "#fff0f3", "primata_text": "#9d174d",
+            "header_bg": "linear-gradient(135deg, #be185d 0%, #4a1942 100%)",
+            "button_bg": "linear-gradient(135deg, #fb7185, #e11d48)", "accent": "#fb7185"
+        },
+        "forest": {
+            "bg_main": "#1a2e1a", "text_color": "#d1fae5", "card_bg": "rgba(26,46,26,0.8)",
+            "primata_bg": "#f0fff0", "primata_text": "#14532d",
+            "header_bg": "linear-gradient(135deg, #2d6a4f 0%, #1a2e1a 100%)",
+            "button_bg": "linear-gradient(135deg, #4ade80, #16a34a)", "accent": "#4ade80"
+        },
+        "neon": {
+            "bg_main": "#0a0a0a", "text_color": "#f0f0f0", "card_bg": "rgba(10,10,10,0.9)",
+            "primata_bg": "#f0f0f0", "primata_text": "#ff007f",
+            "header_bg": "linear-gradient(135deg, #ff007f 0%, #0a0a0a 100%)",
+            "button_bg": "linear-gradient(135deg, #ff007f, #7f00ff)", "accent": "#ff007f"
+        },
+        "marshmallow": {
+            "bg_main": "#fdf2f8", "text_color": "#4a1942", "card_bg": "rgba(255,255,255,0.9)",
+            "primata_bg": "#fce7f3", "primata_text": "#9d174d",
+            "header_bg": "linear-gradient(135deg, #fbcfe8 0%, #fce7f3 100%)",
+            "button_bg": "linear-gradient(135deg, #f472b6, #db2777)", "accent": "#f472b6"
+        },
+        "midnight": {
+            "bg_main": "#0b0f19", "text_color": "#cbd5e1", "card_bg": "rgba(15,23,42,0.9)",
+            "primata_bg": "#1e293b", "primata_text": "#38bdf8",
+            "header_bg": "linear-gradient(135deg, #1e293b 0%, #0b0f19 100%)",
+            "button_bg": "linear-gradient(135deg, #38bdf8, #0284c7)", "accent": "#38bdf8"
+        },
+        "aurora": {
+            "bg_main": "#2e1065", "text_color": "#ede9fe", "card_bg": "rgba(46,16,101,0.8)",
+            "primata_bg": "#f5f3ff", "primata_text": "#4c1d95",
+            "header_bg": "linear-gradient(135deg, #8b5cf6 0%, #2e1065 100%)",
+            "button_bg": "linear-gradient(135deg, #a78bfa, #7c3aed)", "accent": "#a78bfa"
+        },
+        "coffee": {
+            "bg_main": "#3c2a21", "text_color": "#e6d5c9", "card_bg": "rgba(60,42,33,0.9)",
+            "primata_bg": "#f5f0e6", "primata_text": "#5c3a21",
+            "header_bg": "linear-gradient(135deg, #5c3a21 0%, #3c2a21 100%)",
+            "button_bg": "linear-gradient(135deg, #b8956a, #8b5a2b)", "accent": "#b8956a"
+        },
+        "cyberpunk": {
+            "bg_main": "#0d0221", "text_color": "#ff2a6d", "card_bg": "rgba(13,2,33,0.95)",
+            "primata_bg": "#1a0a2e", "primata_text": "#05d9e8",
+            "header_bg": "linear-gradient(135deg, #ff2a6d 0%, #0d0221 100%)",
+            "button_bg": "linear-gradient(135deg, #05d9e8, #ff2a6d)", "accent": "#05d9e8"
+        }
+    }
 
+    t = themes.get(theme, themes["dark"])
+
+    # Ajuste para daltonismo
     if daltonic == "protanopia":
-        button_bg = "linear-gradient(135deg, #f4a261, #e76f51)"
+        t["button_bg"] = "linear-gradient(135deg, #f4a261, #e76f51)"
+        t["accent"] = "#f4a261"
     elif daltonic == "deuteranopia":
-        button_bg = "linear-gradient(135deg, #2a9d8f, #264653)"
+        t["button_bg"] = "linear-gradient(135deg, #2a9d8f, #264653)"
+        t["accent"] = "#2a9d8f"
     elif daltonic == "tritanopia":
-        button_bg = "linear-gradient(135deg, #9b5de5, #f15bb5)"
+        t["button_bg"] = "linear-gradient(135deg, #9b5de5, #f15bb5)"
+        t["accent"] = "#9b5de5"
 
     st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; background-color: {bg_main}; color: {text_color}; font-size: {font_size}px; }}
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap');
+
+    html, body, [class*="css"] {{
+        font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+        background-color: {t["bg_main"]};
+        color: {t["text_color"]};
+        font-size: {font_size}px;
+    }}
+
+    /* Cabeçalho principal */
     .main-header {{
-        background: {header_bg}; padding: 2rem; border-radius: 16px; margin-bottom: 2rem;
-        border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+        background: {t["header_bg"]};
+        padding: 2.5rem 2rem;
+        border-radius: 32px;
+        margin-bottom: 2rem;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 20px 40px -20px rgba(0,0,0,0.4);
+        backdrop-filter: blur(20px);
+        position: relative;
+        overflow: hidden;
     }}
-    .main-header h1 {{ color: {text_color}; font-size: 2.5rem; }}
-    .explanation-box, .quiz-card, .debate-card {{ background: {card_bg}; border: 1px solid #334155; border-radius: 16px; padding: 2rem; margin: 1.5rem 0; }}
-    .primata-box {{
-        background: {primata_bg}; border: 2px solid #f59e0b; border-radius: 20px; padding: 2rem; margin: 1.5rem 0;
-        color: {primata_text}; position: relative;
+    .main-header::before {{
+        content: "";
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+        animation: rotate 20s linear infinite;
     }}
-    .primata-box::before {{ content: "🐵"; font-size: 3rem; position: absolute; top: -20px; left: 20px; }}
-    .quiz-card:hover {{ transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }}
-    div.stButton>button {{ border-radius: 10px; font-weight: 600; padding: 0.6rem 2rem; border: none; background: {button_bg}; color: white; }}
-    .feedback-correct {{ background: rgba(34,197,94,0.1); border-left: 4px solid #22c55e; padding: 1rem; border-radius: 8px; margin: 1rem 0; color: #bbf7d0; }}
-    .feedback-incorrect {{ background: rgba(239,68,68,0.1); border-left: 4px solid #ef4444; padding: 1rem; border-radius: 8px; margin: 1rem 0; color: #fecaca; }}
+    @keyframes rotate {{
+        from {{ transform: rotate(0deg); }}
+        to {{ transform: rotate(360deg); }}
+    }}
+
+    /* Cartões com glassmorphism */
+    .explanation-box, .quiz-card, .debate-card, .primata-box {{
+        background: {t["card_bg"]};
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 24px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+    }}
+    .quiz-card:hover, .explanation-box:hover {{
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }}
+
+    /* Botões ultra estilizados */
+    div.stButton > button {{
+        border-radius: 14px;
+        font-weight: 600;
+        padding: 0.7rem 2.5rem;
+        border: none;
+        background: {t["button_bg"]};
+        color: white;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        position: relative;
+        overflow: hidden;
+    }}
+    div.stButton > button:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(59,130,246,0.4);
+    }}
+    div.stButton > button:active {{
+        transform: translateY(0);
+    }}
+
+    /* Feedback de respostas */
+    .feedback-correct {{
+        background: rgba(34,197,94,0.15);
+        border-left: 4px solid #22c55e;
+        padding: 1rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        color: #bbf7d0;
+        backdrop-filter: blur(5px);
+    }}
+    .feedback-incorrect {{
+        background: rgba(239,68,68,0.15);
+        border-left: 4px solid #ef4444;
+        padding: 1rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+        color: #fecaca;
+        backdrop-filter: blur(5px);
+    }}
+
+    /* Barra de progresso animada */
+    .stProgress > div > div {{
+        background: linear-gradient(90deg, {t["accent"]}, {t["text_color"]}) !important;
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }}
+
+    /* Inputs e textareas */
+    textarea, input {{
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        border-radius: 14px !important;
+        color: {t["text_color"]} !important;
+        padding: 0.8rem 1rem !important;
+        backdrop-filter: blur(5px);
+    }}
+
+    /* Abas (tabs) estilizadas */
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 0.5rem;
+        background: transparent;
+        border-bottom: 2px solid rgba(255,255,255,0.1);
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color: {t["text_color"]};
+        font-weight: 500;
+        border-radius: 12px 12px 0 0;
+        padding: 0.6rem 1.2rem;
+        transition: all 0.2s;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {t["accent"]} !important;
+        color: white !important;
+    }}
+
+    /* Esconder ícones padrão indesejados */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -241,11 +407,27 @@ if not st.session_state.logged_in:
             cookies["ultralearn_token"] = ""
             cookies.save()
 
-# ---------- Tela de login ----------
+# ---------- Tela de login (com espaços para imagens) ----------
 def tela_login():
-    st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA</h1><p>A plataforma definitiva de aprendizado!</p></div>', unsafe_allow_html=True)
-    st.subheader("🔐 Faça login ou cadastre-se")
+    # URLs de imagens personalizáveis (substitua pelas suas)
+    LOGO_URL = "https://imgur.com/cfSvLdE"        # ← coloque aqui a URL da sua logo
+    MASCOT_URL = "https://imgur.com/a/fAkm34l"   # ← coloque aqui a URL do mascote
 
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if LOGO_URL and "seu-logo" not in LOGO_URL:
+            st.image(LOGO_URL, width=250)
+        else:
+            st.markdown("# 🧠")
+    with col2:
+        st.markdown("""
+        <div style="margin-top: 2rem;">
+            <h1 style="font-size: 3.5rem; font-weight: 700; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">UltraLearn IA</h1>
+            <p style="font-size: 1.3rem; opacity: 0.8;">A plataforma definitiva de aprendizado</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.subheader("🔐 Faça login ou cadastre-se")
     tab1, tab2 = st.tabs(["Login", "Cadastro"])
 
     with tab1:
@@ -568,12 +750,20 @@ def main_app():
         if k not in st.session_state: st.session_state[k] = v
 
     with st.sidebar:
+        # Logo na sidebar (substitua pela sua URL)
+        LOGO_SIDEBAR_URL = "https://imgur.com/cfSvLdE"  # ← coloque aqui a URL da sua logo
+        if LOGO_SIDEBAR_URL and "seu-logo" not in LOGO_SIDEBAR_URL:
+            st.image(LOGO_SIDEBAR_URL, width=200)
+        else:
+            st.markdown("## 🧠 UltraLearn IA")
+
+        st.markdown("---")
         st.markdown("## 👤 Meu Perfil")
         user_row = conn.execute("SELECT avatar, bio FROM users WHERE user_id = ?", (USER_ID,)).fetchone()
         avatar, bio = user_row if user_row else ("🧑", "")
         st.markdown(f"### {avatar} {USER_ID}")
         st.write(bio)
-        if st.button("Sair"):
+        if st.button("🚪 Sair"):
             cookie_token = cookies.get("ultralearn_token")
             if cookie_token:
                 remover_token(cookie_token)
@@ -585,7 +775,10 @@ def main_app():
 
         st.markdown("---")
         st.markdown("## ⚙️ Aparência")
-        theme = st.selectbox("Tema", ["dark","light","natal","halloween"], index=0)
+        theme = st.selectbox("Tema", [
+            "dark", "light", "ocean", "sunset", "forest", "neon",
+            "marshmallow", "midnight", "aurora", "coffee", "cyberpunk"
+        ], index=0)
         font_size = st.slider("Fonte", 12, 24, st.session_state.font_size)
         daltonic = st.selectbox("Daltonismo", [None, "protanopia","deuteranopia","tritanopia"])
         inject_css(theme, font_size, daltonic)
@@ -606,7 +799,7 @@ def main_app():
         st.metric("Streak", f"{data['streak']} dias")
         st.write("🏅 Títulos:", ", ".join(data["titulos"]) if data["titulos"] else "Nenhum")
 
-        # 🆕 Ranking geral na barra lateral
+        # Ranking lateral
         st.markdown("---")
         st.markdown("## 🏅 Ranking Geral")
         ranking = conn.execute("""
@@ -617,18 +810,21 @@ def main_app():
             ORDER BY total_xp DESC
         """).fetchall()
         if ranking:
-            # Monta uma tabela compacta com os dados
             df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP Total"])
-            # Adiciona o avatar do usuário na frente (opcional)
             avatares = {r[0]: (conn.execute("SELECT avatar FROM users WHERE user_id = ?", (r[0],)).fetchone() or ("🧑",))[0] for r in ranking}
             df_rank["Avatar"] = df_rank["Usuário"].map(avatares)
-            # Reordena para exibir avatar, nome, xp
             df_rank = df_rank[["Avatar", "Usuário", "XP Total"]]
             st.dataframe(df_rank, hide_index=True, use_container_width=True)
         else:
             st.write("Nenhum usuário ainda.")
 
-    st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA Titanium</h1><p>A plataforma definitiva de aprendizado!</p></div>', unsafe_allow_html=True)
+    # Cabeçalho principal
+    st.markdown("""
+    <div class="main-header">
+        <h1>🧠 UltraLearn IA</h1>
+        <p>Domine qualquer assunto com inteligência artificial</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     tabs = st.tabs([
         "📖 Estudar", "🎓 Aula Completa", "🧠 Quiz", "🐵 Primata",
@@ -829,7 +1025,7 @@ def main_app():
         st.subheader("👨‍🏫 Professor vs Aluno")
         ptopic_prof = st.text_input("Tópico para aula:", key="prof_topic")
         if "prof_questions" not in st.session_state: st.session_state.prof_questions = []
-        if "prof_idx" not in st.session_state: st.session_state.prof_idx = 0   # segurança extra
+        if "prof_idx" not in st.session_state: st.session_state.prof_idx = 0
         if st.button("Iniciar Aula") and ptopic_prof:
             exp = gen_explanation(ptopic_prof)
             st.session_state.prof_questions = gen_quiz(exp, "médio", 5)
@@ -870,7 +1066,7 @@ def main_app():
             fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
             st.plotly_chart(fig)
 
-        # O ranking completo também aparece aqui (pode manter)
+        # Ranking completo também aqui
         ranking = conn.execute("""
             SELECT u.user_id, COALESCE(SUM(xp.xp_gained), 0) as total_xp
             FROM users u
@@ -879,7 +1075,7 @@ def main_app():
             ORDER BY total_xp DESC
         """).fetchall()
         if ranking:
-            st.subheader("🏅 Ranking Geral (repetido)")
+            st.subheader("🏅 Ranking Geral")
             df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP Total"])
             st.table(df_rank)
 
