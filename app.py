@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Titanium Edition com LOGIN PERSISTENTE (cookies) e RANKING GLOBAL
+UltraLearn IA – Titanium Edition com LOGIN PERSISTENTE, RANKING LATERAL e CORREÇÕES
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid
@@ -145,7 +145,6 @@ def user_exists(user_id):
     return conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone() is not None
 
 def gerar_token(user_id):
-    """Gera um token único e salva no banco com validade de 30 dias."""
     token = str(uuid.uuid4())
     expires = (datetime.now() + timedelta(days=30)).isoformat()
     conn.execute("INSERT INTO auth_tokens (token, user_id, expires) VALUES (?, ?, ?)", (token, user_id, expires))
@@ -153,7 +152,6 @@ def gerar_token(user_id):
     return token
 
 def validar_token(token):
-    """Retorna o user_id se o token for válido e não expirado, ou None."""
     row = conn.execute("SELECT user_id, expires FROM auth_tokens WHERE token = ?", (token,)).fetchone()
     if not row:
         return None
@@ -554,13 +552,17 @@ def text_to_speech(text):
 
 # ---------- Interface principal ----------
 def main_app():
+    # Inicialização expandida de estados da sessão
     session_defaults = {
         "explanation": "", "topic": "", "primata_explanation": "",
         "quiz_questions": [], "quiz_index": 0, "quiz_score": 0,
         "quiz_active": False, "quiz_feedback": None,
         "flashcards": [], "theme": "dark", "pomodoro_seconds": 0,
         "pomodoro_active": False, "font_size": 16, "daltonic": None,
-        "story_state": None
+        "story_state": None,
+        "prof_questions": [], "prof_idx": 0,
+        "daily_questions": [], "daily_idx": 0,
+        "caotico_questions": [], "caos_idx": 0, "caos_score": 0
     }
     for k, v in session_defaults.items():
         if k not in st.session_state: st.session_state[k] = v
@@ -572,7 +574,6 @@ def main_app():
         st.markdown(f"### {avatar} {USER_ID}")
         st.write(bio)
         if st.button("Sair"):
-            # Remove cookie e limpa sessão
             cookie_token = cookies.get("ultralearn_token")
             if cookie_token:
                 remover_token(cookie_token)
@@ -604,6 +605,28 @@ def main_app():
         st.metric("XP Total", data["xp"])
         st.metric("Streak", f"{data['streak']} dias")
         st.write("🏅 Títulos:", ", ".join(data["titulos"]) if data["titulos"] else "Nenhum")
+
+        # 🆕 Ranking geral na barra lateral
+        st.markdown("---")
+        st.markdown("## 🏅 Ranking Geral")
+        ranking = conn.execute("""
+            SELECT u.user_id, COALESCE(SUM(xp.xp_gained), 0) as total_xp
+            FROM users u
+            LEFT JOIN xp_log xp ON u.user_id = xp.user_id
+            GROUP BY u.user_id
+            ORDER BY total_xp DESC
+        """).fetchall()
+        if ranking:
+            # Monta uma tabela compacta com os dados
+            df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP Total"])
+            # Adiciona o avatar do usuário na frente (opcional)
+            avatares = {r[0]: (conn.execute("SELECT avatar FROM users WHERE user_id = ?", (r[0],)).fetchone() or ("🧑",))[0] for r in ranking}
+            df_rank["Avatar"] = df_rank["Usuário"].map(avatares)
+            # Reordena para exibir avatar, nome, xp
+            df_rank = df_rank[["Avatar", "Usuário", "XP Total"]]
+            st.dataframe(df_rank, hide_index=True, use_container_width=True)
+        else:
+            st.write("Nenhum usuário ainda.")
 
     st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA Titanium</h1><p>A plataforma definitiva de aprendizado!</p></div>', unsafe_allow_html=True)
 
@@ -801,15 +824,17 @@ def main_app():
             st.markdown(f"### Avaliação da IA:\n{avaliacao}")
             add_xp(15)
 
-    # Aba Professor vs Aluno
+    # Aba Professor vs Aluno – CORRIGIDA
     with tabs[9]:
         st.subheader("👨‍🏫 Professor vs Aluno")
         ptopic_prof = st.text_input("Tópico para aula:", key="prof_topic")
         if "prof_questions" not in st.session_state: st.session_state.prof_questions = []
+        if "prof_idx" not in st.session_state: st.session_state.prof_idx = 0   # segurança extra
         if st.button("Iniciar Aula") and ptopic_prof:
             exp = gen_explanation(ptopic_prof)
             st.session_state.prof_questions = gen_quiz(exp, "médio", 5)
             st.session_state.prof_idx = 0
+            st.rerun()
         if st.session_state.prof_questions:
             idx = st.session_state.prof_idx
             if idx < len(st.session_state.prof_questions):
@@ -817,10 +842,15 @@ def main_app():
                 st.write(q['question'])
                 ans = st.text_input("Sua resposta:", key=f"prof_ans_{idx}")
                 if st.button("Enviar Resposta"):
-                    if ans.strip().lower() == q['correct_answer'].lower(): st.success("Correto!"); add_xp(5)
-                    else: st.error(f"Errado. Resposta: {q['correct_answer']}"); st.info(q['explanation'])
-                    st.session_state.prof_idx += 1; st.rerun()
-            else: st.success("Aula concluída!")
+                    if ans.strip().lower() == q['correct_answer'].lower():
+                        st.success("Correto!"); add_xp(5)
+                    else:
+                        st.error(f"Errado. Resposta: {q['correct_answer']}")
+                        st.info(q['explanation'])
+                    st.session_state.prof_idx += 1
+                    st.rerun()
+            else:
+                st.success("Aula concluída!")
 
     # Aba Progresso
     with tabs[10]:
@@ -840,6 +870,7 @@ def main_app():
             fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
             st.plotly_chart(fig)
 
+        # O ranking completo também aparece aqui (pode manter)
         ranking = conn.execute("""
             SELECT u.user_id, COALESCE(SUM(xp.xp_gained), 0) as total_xp
             FROM users u
@@ -848,7 +879,7 @@ def main_app():
             ORDER BY total_xp DESC
         """).fetchall()
         if ranking:
-            st.subheader("🏅 Ranking Geral")
+            st.subheader("🏅 Ranking Geral (repetido)")
             df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP Total"])
             st.table(df_rank)
 
@@ -870,7 +901,8 @@ def main_app():
             if st.button("Gerar Quiz do Dia"):
                 exp = gen_explanation(daily_topic)
                 st.session_state.daily_questions = gen_quiz(exp, "médio", 3)
-                st.session_state.daily_idx = 0; st.rerun()
+                st.session_state.daily_idx = 0
+                st.rerun()
         else:
             st.success(f"Desafio de hoje já concluído! Streak: {data['streak']} dias")
         if "daily_questions" in st.session_state and st.session_state.daily_questions:
