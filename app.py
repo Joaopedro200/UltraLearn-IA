@@ -1,41 +1,73 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Versão Completa com Turso (Banco de Dados na Nuvem)
+UltraLearn IA – Titanium Edition (todos os modos avançados, gamificação, importação, etc.)
 """
 import streamlit as st
-import json, os, random, io, base64, time
+import json, os, random, io, base64, time, uuid, re
 from datetime import datetime, timedelta, date
 from groq import Groq
 from gtts import gTTS
 from fpdf import FPDF
 import libsql
+import graphviz
+import PyPDF2
+import pytesseract
+from PIL import Image
+import wikipedia
+import speech_recognition as sr
+from streamlit_mic_recorder import speech_to_text
+import plotly.express as px
+import pandas as pd
 
 # ---------- Configuração da página ----------
 st.set_page_config(page_title="UltraLearn IA", page_icon="🧠", layout="centered")
 
-# ---------- CSS customizado ----------
-def inject_css(theme="dark"):
+# ---------- CSS customizado dinâmico ----------
+def inject_css(theme="dark", font_size=16, daltonic=None):
     if theme == "dark":
         bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
             "#0f172a", "#e2e8f0", "#1e293b", "#fef3c7", "#78350f",
             "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "linear-gradient(135deg, #3b82f6, #2563eb)"
         )
-    else:
+    elif theme == "light":
         bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
             "#ffffff", "#1e293b", "#f8fafc", "#fff7ed", "#7c2d12",
             "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)", "linear-gradient(135deg, #2563eb, #1d4ed8)"
         )
+    elif theme == "natal":
+        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
+            "#1a3c34", "#e8f5e9", "#2d5a4b", "#ffebee", "#b71c1c",
+            "linear-gradient(135deg, #b71c1c 0%, #d32f2f 100%)", "linear-gradient(135deg, #c62828, #b71c1c)"
+        )
+    elif theme == "halloween":
+        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
+            "#1a1a2e", "#f0e6d3", "#2e2e4a", "#ffb74d", "#4a1e1e",
+            "linear-gradient(135deg, #4a1e1e 0%, #7b2d26 100%)", "linear-gradient(135deg, #e65100, #bf360c)"
+        )
+    else:  # fallback dark
+        bg_main, text_color, card_bg, primata_bg, primata_text, header_bg, button_bg = (
+            "#0f172a", "#e2e8f0", "#1e293b", "#fef3c7", "#78350f",
+            "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "linear-gradient(135deg, #3b82f6, #2563eb)"
+        )
+
+    # Ajustes para daltonismo
+    if daltonic == "protanopia":
+        button_bg = "linear-gradient(135deg, #f4a261, #e76f51)"
+    elif daltonic == "deuteranopia":
+        button_bg = "linear-gradient(135deg, #2a9d8f, #264653)"
+    elif daltonic == "tritanopia":
+        button_bg = "linear-gradient(135deg, #9b5de5, #f15bb5)"
 
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; background-color: {bg_main}; color: {text_color}; }}
+    html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; background-color: {bg_main}; color: {text_color}; font-size: {font_size}px; }}
     .main-header {{
         background: {header_bg}; padding: 2rem; border-radius: 16px; margin-bottom: 2rem;
         border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
     }}
     .main-header h1 {{ color: {text_color}; font-size: 2.5rem; }}
-    .explanation-box, .quiz-card {{ background: {card_bg}; border: 1px solid #334155; border-radius: 16px; padding: 2rem; margin: 1.5rem 0; }}
+    .explanation-box, .quiz-card, .debate-card {{ background: {card_bg}; border: 1px solid #334155; border-radius: 16px; padding: 2rem; margin: 1.5rem 0; }}
     .primata-box {{
         background: {primata_bg}; border: 2px solid #f59e0b; border-radius: 20px; padding: 2rem; margin: 1.5rem 0;
         color: {primata_text}; position: relative;
@@ -56,13 +88,14 @@ if not TURSO_URL or not TURSO_TOKEN:
     st.stop()
 
 conn = libsql.connect("ultralearn.db", sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
-conn.sync()  # sincroniza o estado remoto na primeira carga
+conn.sync()
 
-# Cria as tabelas se não existirem
+# Criação das tabelas
 conn.execute("""
     CREATE TABLE IF NOT EXISTS user_data (
         user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, streak INTEGER DEFAULT 0,
-        last_daily TEXT, achievements TEXT DEFAULT '[]'
+        last_daily TEXT, achievements TEXT DEFAULT '[]',
+        titulos TEXT DEFAULT '[]', bio TEXT DEFAULT '', avatar TEXT DEFAULT '🧑'
     )
 """)
 conn.execute("""
@@ -72,35 +105,67 @@ conn.execute("""
         ease_factor REAL DEFAULT 2.5, next_review TEXT
     )
 """)
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS xp_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, date TEXT, xp_gained INTEGER
+    )
+""")
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, topic TEXT,
+        quizzes INTEGER DEFAULT 0, errors INTEGER DEFAULT 0
+    )
+""")
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS challenges (
+        id TEXT PRIMARY KEY, quiz_json TEXT, creator_user_id TEXT
+    )
+""")
 conn.commit()
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# ---------- Estados da sessão ----------
+# ---------- IDs e estados ----------
+if "user_id" not in st.session_state:
+    # Tenta pegar de cookie, mas vamos usar um campo de perfil; por enquanto "default"
+    st.session_state.user_id = "default"
+USER_ID = st.session_state.user_id  # será atualizado conforme perfil
+
+# ---------- Inicialização de estados da sessão ----------
 session_defaults = {
     "explanation": "", "topic": "", "primata_explanation": "",
     "quiz_questions": [], "quiz_index": 0, "quiz_score": 0,
     "quiz_active": False, "quiz_feedback": None,
     "flashcards": [], "theme": "dark", "pomodoro_seconds": 0,
-    "pomodoro_active": False
+    "pomodoro_active": False, "font_size": 16, "daltonic": None,
+    "story_state": None, "debate_topic": None
 }
 for k, v in session_defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# ---------- Funções de IA (sem alterações) ----------
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+# ---------- Funções de IA existentes (com pequenas adaptações) ----------
 def gen_explanation(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
         messages=[{"role":"user","content":f"Explique '{topic}' em português, 3 parágrafos detalhados."}], temperature=0.7, max_tokens=1500)
     return resp.choices[0].message.content.strip()
 
+def gen_resumo(text):
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content":f"Resuma o seguinte texto em português, de forma concisa (máximo 1 parágrafo): {text}"}], temperature=0.5, max_tokens=500)
+    return resp.choices[0].message.content.strip()
+
 def gen_primata(topic, style="normal"):
     prompts = {
         "normal": f"Macaco professor explica '{topic}' em português, aula completa e divertida, 5+ parágrafos.",
-        "rapper": f"Macaco rapper explica '{topic}' em forma de rap rimado em português. Use muitas gírias e batida de rap.",
-        "conspiracy": f"Macaco conspirador explica '{topic}' como uma teoria da conspiração maluca e engraçada em português.",
-        "shakespeare": f"Macaco shakesperiano explica '{topic}' em português arcaico, estilo William Shakespeare."
+        "rapper": f"Macaco rapper explica '{topic}' em forma de rap rimado em português.",
+        "conspiracy": f"Macaco conspirador explica '{topic}' como teoria da conspiração maluca.",
+        "shakespeare": f"Macaco shakesperiano explica '{topic}' em português arcaico.",
+        "standup": f"Macaco comediante faz stand-up sobre '{topic}', com piadas e humor.",
+        "eli5": f"Explique '{topic}' como se eu fosse uma criança de 5 anos, de forma super simples.",
+        "poesia": f"Macaco poeta explica '{topic}' em forma de poesia rimada."
     }
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
-        messages=[{"role":"user","content": prompts[style]}], temperature=0.9, max_tokens=2500)
+        messages=[{"role":"user","content": prompts.get(style, prompts["normal"])}], temperature=0.9, max_tokens=2500)
     return resp.choices[0].message.content.strip()
 
 def gen_quiz(text, difficulty, num):
@@ -117,17 +182,52 @@ def gen_redacao_avaliacao(texto):
         messages=[{"role":"user","content":f"Avalie esta redação em português: '{texto}'. Dê nota de 0 a 10 e sugira melhorias."}], temperature=0.5, max_tokens=300)
     return resp.choices[0].message.content.strip()
 
-# ---------- Persistência (agora no Turso) ----------
-USER_ID = "default"
+def gen_debate(topic):
+    prompt = f"Gere um debate entre dois especialistas (Prós e Contras) sobre '{topic}'. Cada um fala 2 parágrafos. Formato: '**Prós:** ... **Contras:** ...'"
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}], temperature=0.8, max_tokens=500)
+    return resp.choices[0].message.content.strip()
 
+def gen_historia_interativa(topic, context=None):
+    if context is None:
+        prompt = f"Inicie uma história interativa em português sobre '{topic}'. Apresente o cenário e dê 3 opções para o usuário escolher (A, B, C)."
+    else:
+        prompt = f"Continue a história interativa sobre '{topic}' baseado na última escolha: {context}. Avance a trama e ofereça 3 novas opções (A, B, C)."
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}], temperature=0.9, max_tokens=600)
+    return resp.choices[0].message.content.strip()
+
+def gen_mapa_mental(topic):
+    prompt = f"Crie um mapa mental em formato JSON com 'nodes' (array de strings, cada string é um conceito) e 'edges' (array de pares [origem, destino]) representando as conexões sobre '{topic}'. Apenas JSON."
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}], temperature=0.7, max_tokens=500)
+    cont = resp.choices[0].message.content.strip()
+    if cont.startswith("```"): cont = cont[cont.find("\n"):].rstrip("```").strip()
+    try:
+        data = json.loads(cont)
+        return data
+    except:
+        return None
+
+def gen_musica(topic):
+    prompt = f"Crie uma letra de música em português sobre '{topic}', com refrão e duas estrofes. Seja criativo e poético."
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}], temperature=0.9, max_tokens=500)
+    return resp.choices[0].message.content.strip()
+
+# ---------- Persistência (adaptada para múltiplos usuários) ----------
 def load_user_data():
     row = conn.execute("SELECT * FROM user_data WHERE user_id = ?", (USER_ID,)).fetchone()
     if row:
-        return {"user_id": row[0], "xp": row[1], "streak": row[2], "last_daily": row[3], "achievements": json.loads(row[4])}
+        return {"user_id": row[0], "xp": row[1], "streak": row[2], "last_daily": row[3],
+                "achievements": json.loads(row[4]), "titulos": json.loads(row[5]),
+                "bio": row[6], "avatar": row[7]}
     else:
+        default = {"user_id": USER_ID, "xp": 0, "streak": 0, "last_daily": None,
+                   "achievements": [], "titulos": [], "bio": "", "avatar": "🧑"}
         conn.execute("INSERT INTO user_data(user_id) VALUES (?)", (USER_ID,))
         conn.commit()
-        return {"user_id": USER_ID, "xp": 0, "streak": 0, "last_daily": None, "achievements": []}
+        return default
 
 def save_user_data(updates):
     sets = ", ".join(f"{k} = ?" for k in updates)
@@ -135,8 +235,44 @@ def save_user_data(updates):
     conn.execute(f"UPDATE user_data SET {sets} WHERE user_id = ?", (*vals, USER_ID))
     conn.commit()
 
-def load_questions():
-    rows = conn.execute("SELECT * FROM questions WHERE user_id = ?", (USER_ID,)).fetchall()
+def add_xp(amount):
+    data = load_user_data()
+    new_xp = data["xp"] + amount
+    today = date.today().isoformat()
+    conn.execute("INSERT INTO xp_log (user_id, date, xp_gained) VALUES (?, ?, ?)", (USER_ID, today, amount))
+    conn.commit()
+    save_user_data({"xp": new_xp})
+    # Conquistas básicas
+    achievements = data["achievements"]
+    if new_xp >= 100 and "Centenário" not in achievements:
+        achievements.append("Centenário"); save_user_data({"achievements": json.dumps(achievements)}); st.balloons()
+    if new_xp >= 500 and "Quinhentão" not in achievements:
+        achievements.append("Quinhentão"); save_user_data({"achievements": json.dumps(achievements)}); st.balloons()
+    # Conquistas secretas
+    if len(achievements) >= 5 and "Colecionador" not in achievements:
+        achievements.append("Colecionador"); save_user_data({"achievements": json.dumps(achievements)})
+    # Títulos
+    titulos = data["titulos"]
+    if new_xp >= 1000 and "Mestre Supremo" not in titulos:
+        titulos.append("Mestre Supremo"); save_user_data({"titulos": json.dumps(titulos)})
+    if data["streak"] >= 7 and "Estudante de Férias" not in titulos:
+        titulos.append("Estudante de Férias"); save_user_data({"titulos": json.dumps(titulos)})
+
+def update_daily_streak():
+    data = load_user_data()
+    today = date.today().isoformat()
+    if data["last_daily"] != today:
+        new_streak = data["streak"] + 1 if data["last_daily"] == (date.today() - timedelta(days=1)).isoformat() else 1
+        save_user_data({"streak": new_streak, "last_daily": today})
+        # Conquista de streak
+        if new_streak == 7 and "7 Dias" not in data["achievements"]:
+            data["achievements"].append("7 Dias"); save_user_data({"achievements": json.dumps(data["achievements"])})
+        return new_streak
+    return data["streak"]
+
+def load_questions(user_id=None):
+    uid = user_id or USER_ID
+    rows = conn.execute("SELECT * FROM questions WHERE user_id = ?", (uid,)).fetchall()
     questions = []
     for r in rows:
         questions.append({
@@ -147,17 +283,18 @@ def load_questions():
         })
     return questions
 
-def save_question(q):
+def save_question(q, user_id=None):
+    uid = user_id or USER_ID
     conn.execute(
         "INSERT INTO questions(user_id, question, type, options, correct_answer, explanation) VALUES (?,?,?,?,?,?)",
-        (USER_ID, q["question"], q["type"], json.dumps(q.get("options", [])), q["correct_answer"], q.get("explanation", ""))
+        (uid, q["question"], q["type"], json.dumps(q.get("options", [])), q["correct_answer"], q.get("explanation", ""))
     )
     conn.commit()
 
 def update_spaced_repetition(question, quality):
     now = datetime.now()
-    # Procura se a questão já existe
-    existing = conn.execute("SELECT id, interval, ease_factor FROM questions WHERE question = ? AND user_id = ?", (question["question"], USER_ID)).fetchone()
+    existing = conn.execute("SELECT id, interval, ease_factor FROM questions WHERE question = ? AND user_id = ?",
+                            (question["question"], USER_ID)).fetchone()
     if existing:
         interval, ease = existing[1], existing[2]
         if quality >= 3:
@@ -167,40 +304,18 @@ def update_spaced_repetition(question, quality):
             interval = 1
             ease = max(1.3, ease - 0.2)
         next_review = (now + timedelta(days=interval)).strftime("%Y-%m-%d")
-        conn.execute("UPDATE questions SET interval = ?, ease_factor = ?, next_review = ? WHERE id = ?", (interval, ease, next_review, existing[0]))
+        conn.execute("UPDATE questions SET interval = ?, ease_factor = ?, next_review = ? WHERE id = ?",
+                     (interval, ease, next_review, existing[0]))
     else:
         next_review = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         conn.execute(
             "INSERT INTO questions(user_id, question, type, options, correct_answer, explanation, interval, ease_factor, next_review) VALUES (?,?,?,?,?,?,1,2.5,?)",
-            (USER_ID, question["question"], question["type"], json.dumps(question.get("options", [])), question["correct_answer"], question.get("explanation", ""), next_review)
+            (USER_ID, question["question"], question["type"], json.dumps(question.get("options", [])),
+             question["correct_answer"], question.get("explanation", ""), next_review)
         )
     conn.commit()
 
-def add_xp(amount):
-    data = load_user_data()
-    new_xp = data["xp"] + amount
-    save_user_data({"xp": new_xp})
-    achievements = data["achievements"]
-    if new_xp >= 100 and "Centenário" not in achievements:
-        achievements.append("Centenário")
-        save_user_data({"achievements": json.dumps(achievements)})
-        st.balloons()
-        st.success("🏆 Conquista desbloqueada: Centenário (100 XP)")
-    if new_xp >= 500 and "Quinhentão" not in achievements:
-        achievements.append("Quinhentão")
-        save_user_data({"achievements": json.dumps(achievements)})
-        st.balloons()
-        st.success("🏆 Conquista desbloqueada: Quinhentão (500 XP)")
-
-def update_daily_streak():
-    data = load_user_data()
-    today = date.today().isoformat()
-    if data["last_daily"] != today:
-        new_streak = data["streak"] + 1 if data["last_daily"] == (date.today() - timedelta(days=1)).isoformat() else 1
-        save_user_data({"streak": new_streak, "last_daily": today})
-        return new_streak
-    return data["streak"]
-
+# ---------- Funções auxiliares (PDF, TTS, Flashcards) ----------
 def generate_flashcards(questions):
     return [(q["question"], q["correct_answer"] + " - " + q.get("explanation", "")) for q in questions]
 
@@ -226,181 +341,420 @@ def text_to_speech(text):
     fp.seek(0)
     return fp
 
-# ---------- Componentes (idênticos à versão anterior) ----------
-def show_quiz():
+# ---------- Componentes da interface ----------
+def show_quiz(questions, mode="normal"):
     idx = st.session_state.quiz_index
-    total = len(st.session_state.quiz_questions)
+    total = len(questions)
     if idx >= total:
         st.balloons()
         st.success(f"Quiz concluído! Acertos: {st.session_state.quiz_score}/{total}")
         add_xp(st.session_state.quiz_score * 10)
-        if st.button("Limpar Quiz"):
-            st.session_state.quiz_questions=[]; st.session_state.quiz_index=0; st.rerun()
-        if st.button("Gerar Flashcards"):
-            st.session_state.flashcards = generate_flashcards(st.session_state.quiz_questions)
-            st.rerun()
-        if st.button("Exportar Quiz em PDF"):
-            pdf_bytes = export_quiz_pdf(st.session_state.quiz_questions)
-            b64 = base64.b64encode(pdf_bytes).decode()
-            href = f'<a href="data:application/octet-stream;base64,{b64}" download="quiz.pdf">Clique aqui para baixar o PDF</a>'
-            st.markdown(href, unsafe_allow_html=True)
+        if st.button("Limpar Quiz"): st.session_state.quiz_questions=[]; st.session_state.quiz_index=0; st.rerun()
+        if st.button("Gerar Flashcards"): st.session_state.flashcards = generate_flashcards(questions); st.rerun()
+        if st.button("Exportar PDF"):
+            b64 = base64.b64encode(export_quiz_pdf(questions)).decode()
+            st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="quiz.pdf">Baixar PDF</a>', unsafe_allow_html=True)
         return
-    q = st.session_state.quiz_questions[idx]
+    q = questions[idx]
     st.progress(idx/total); st.caption(f"Questão {idx+1}/{total}")
     with st.container():
         st.markdown('<div class="quiz-card">', unsafe_allow_html=True)
         st.subheader(q['question'])
-        if q["type"]=="multiple_choice":
+        if q["type"] == "multiple_choice":
             opt = st.radio("Opções", q['options'], index=None)
             if st.button("Responder") and opt:
                 user = opt.split('.')[0].strip()
                 correct = q['correct_answer']
-                if user==correct: st.session_state.quiz_score+=1; st.session_state.quiz_feedback=(True,correct,q['explanation'])
-                else: st.session_state.quiz_feedback=(False,correct,q['explanation'])
-                st.session_state.quiz_index+=1; st.rerun()
+                if user == correct: st.session_state.quiz_score += 1; st.session_state.quiz_feedback = (True, correct, q['explanation'])
+                else: st.session_state.quiz_feedback = (False, correct, q['explanation'])
+                st.session_state.quiz_index += 1; st.rerun()
         else:
             opt = st.radio("V/F", ["Verdadeiro","Falso"], index=None)
             if st.button("Responder") and opt:
-                user = "Verdadeiro" if opt=="Verdadeiro" else "Falso"
+                user = "Verdadeiro" if opt == "Verdadeiro" else "Falso"
                 correct = q['correct_answer']
-                if user==correct: st.session_state.quiz_score+=1; st.session_state.quiz_feedback=(True,correct,q['explanation'])
-                else: st.session_state.quiz_feedback=(False,correct,q['explanation'])
-                st.session_state.quiz_index+=1; st.rerun()
+                if user == correct: st.session_state.quiz_score += 1; st.session_state.quiz_feedback = (True, correct, q['explanation'])
+                else: st.session_state.quiz_feedback = (False, correct, q['explanation'])
+                st.session_state.quiz_index += 1; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     if st.session_state.quiz_feedback:
         a,c,e = st.session_state.quiz_feedback
         st.markdown(f'<div class="feedback-{"correct" if a else "incorrect"}">{"✅" if a else "❌"} {e}</div>', unsafe_allow_html=True)
         st.session_state.quiz_feedback=None
 
-def show_flashcards():
-    if not st.session_state.flashcards: return
-    for i, (front, back) in enumerate(st.session_state.flashcards):
-        with st.expander(f"Flashcard {i+1}: {front}"):
-            st.write(f"**Resposta:** {back}")
+# ---------- Modo Aula Completa ----------
+def aula_completa(topic):
+    exp = gen_explanation(topic)
+    st.markdown(f'<div class="explanation-box">{exp}</div>', unsafe_allow_html=True)
+    add_xp(5)
+    quiz = gen_quiz(exp, "médio", 5)
+    if quiz:
+        st.session_state.quiz_questions = quiz
+        st.session_state.quiz_index = 0
+        st.session_state.quiz_score = 0
+        st.session_state.quiz_active = True
+        st.experimental_rerun()
 
-def pomodoro_timer():
-    if st.session_state.pomodoro_active and st.session_state.pomodoro_seconds > 0:
-        st.session_state.pomodoro_seconds -= 1
-        mins, secs = divmod(st.session_state.pomodoro_seconds, 60)
-        st.sidebar.metric("⏳ Pomodoro", f"{mins:02d}:{secs:02d}")
-        time.sleep(1)
+# ---------- Mapa Mental ----------
+def render_mapa_mental(topic):
+    data = gen_mapa_mental(topic)
+    if data:
+        g = graphviz.Digraph()
+        for node in data.get("nodes", []):
+            g.node(node)
+        for edge in data.get("edges", []):
+            if len(edge) == 2:
+                g.edge(edge[0], edge[1])
+        st.graphviz_chart(g)
+    else:
+        st.error("Não foi possível gerar o mapa mental.")
+
+# ---------- Debate ----------
+def show_debate(topic):
+    debate_text = gen_debate(topic)
+    st.markdown(debate_text)
+    col1, col2, col3 = st.columns([1,1,1])
+    with col1:
+        if st.button("👍 Prós"):
+            st.success("Você votou nos Prós!")
+    with col2:
+        if st.button("👎 Contras"):
+            st.success("Você votou nos Contras!")
+    with col3:
+        if st.button("🤝 Empate"):
+            st.success("Você considerou empate!")
+
+# ---------- História Interativa ----------
+def show_historia_interativa(topic):
+    if "story_state" not in st.session_state: st.session_state.story_state = None
+    if st.session_state.story_state is None:
+        historia = gen_historia_interativa(topic)
+        st.session_state.story_state = {"text": historia, "topic": topic}
         st.rerun()
-    elif st.session_state.pomodoro_seconds == 0:
-        st.sidebar.success("Pomodoro concluído!")
-        st.session_state.pomodoro_active = False
-        st.balloons()
+    else:
+        st.write(st.session_state.story_state["text"])
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("Opção A"):
+                st.session_state.story_state["text"] = gen_historia_interativa(topic, "A")
+                st.rerun()
+        with col2:
+            if st.button("Opção B"):
+                st.session_state.story_state["text"] = gen_historia_interativa(topic, "B")
+                st.rerun()
+        with col3:
+            if st.button("Opção C"):
+                st.session_state.story_state["text"] = gen_historia_interativa(topic, "C")
+                st.rerun()
+        if st.button("Reiniciar História"):
+            st.session_state.story_state = None
+            st.rerun()
 
-# ---------- Interface principal ----------
+# ---------- Função principal ----------
 def main():
+    # Sidebar
     with st.sidebar:
-        st.markdown("## ⚙️ Configurações")
-        theme = st.toggle("Modo Escuro", value=st.session_state.theme=="dark")
-        st.session_state.theme = "dark" if theme else "light"
-        inject_css(st.session_state.theme)
+        st.markdown("## 👤 Perfil")
+        nome = st.text_input("Seu nome (para ranking)", value=st.session_state.user_id)
+        if nome and nome != st.session_state.user_id:
+            st.session_state.user_id = nome
+            USER_ID = nome
+            st.success(f"Bem-vindo, {nome}!")
+        avatar = st.selectbox("Avatar", ["🧑","👩","👨","🐵","🦊","🐱","🐶","👽"])
+        bio = st.text_area("Bio curta")
+        if st.button("Salvar Perfil"):
+            data = load_user_data()
+            save_user_data({"avatar": avatar, "bio": bio})
+            st.success("Perfil atualizado!")
+
+        st.markdown("---")
+        st.markdown("## ⚙️ Aparência")
+        theme = st.selectbox("Tema", ["dark","light","natal","halloween"], index=0)
+        st.session_state.theme = theme
+        font_size = st.slider("Tamanho da fonte", 12, 24, st.session_state.font_size)
+        st.session_state.font_size = font_size
+        daltonic = st.selectbox("Modo Daltônico", [None, "protanopia","deuteranopia","tritanopia"])
+        st.session_state.daltonic = daltonic
+        inject_css(theme, font_size, daltonic)
 
         st.markdown("---")
         st.markdown("### ⏱️ Pomodoro")
-        if st.button("Iniciar 25 min"):
-            st.session_state.pomodoro_seconds = 25*60
-            st.session_state.pomodoro_active = True
-        pomodoro_timer()
+        if st.button("Iniciar 25 min"): st.session_state.pomodoro_seconds = 25*60; st.session_state.pomodoro_active = True
+        if st.session_state.pomodoro_active and st.session_state.pomodoro_seconds > 0:
+            st.session_state.pomodoro_seconds -= 1
+            mins, secs = divmod(st.session_state.pomodoro_seconds, 60)
+            st.metric("⏳ Pomodoro", f"{mins:02d}:{secs:02d}")
+        elif st.session_state.pomodoro_active:
+            st.sidebar.success("Pomodoro concluído!"); st.session_state.pomodoro_active = False
 
         st.markdown("---")
         data = load_user_data()
         st.metric("XP Total", data["xp"])
-        st.metric("Streak Diário", f"{data['streak']} dias")
-        if data["achievements"]:
-            st.markdown("**🏆 Conquistas:**")
-            for a in data["achievements"]:
-                st.write(f"- {a}")
+        st.metric("Streak", f"{data['streak']} dias")
+        st.write("🏅 Títulos:", ", ".join(data["titulos"]) if data["titulos"] else "Nenhum")
 
-    st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA</h1><p>Aprenda com estilo!</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA Titanium</h1><p>A plataforma definitiva de aprendizado!</p></div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "📖 Ensinar", "🧠 Quiz", "🐵 Primata", "✍️ Redação", "👨‍🏫 Professor", "📊 Dashboard", "📅 Diário"
+    # Abas
+    tabs = st.tabs([
+        "📖 Estudar", "🎓 Aula Completa", "🧠 Quiz", "🐵 Primata",
+        "🗺️ Mapa Mental", "⚖️ Debate", "📖 História", "🎵 Música",
+        "✍️ Redação", "👨‍🏫 Professor", "📊 Progresso", "📅 Diário"
     ])
 
-    with tab1:
-        topic = st.text_input("Assunto:", key="topic")
+    # Aba Estudar
+    with tabs[0]:
+        st.subheader("Modo de Estudo")
+        # Upload PDF
+        uploaded_pdf = st.file_uploader("Envie um PDF", type="pdf")
+        if uploaded_pdf:
+            reader = PyPDF2.PdfReader(uploaded_pdf)
+            text = " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
+            st.text_area("Texto extraído", text, height=100)
+            if st.button("Gerar Explicação do PDF") and text:
+                st.session_state.explanation = gen_explanation(text[:3000])  # limita tokens
+                st.rerun()
+        # Upload imagem OCR
+        uploaded_img = st.file_uploader("Ou envie uma imagem com texto", type=["png","jpg","jpeg"])
+        if uploaded_img:
+            img = Image.open(uploaded_img)
+            extracted = pytesseract.image_to_string(img, lang='por')
+            st.text_area("Texto extraído", extracted, height=100)
+            if st.button("Gerar Explicação da Imagem") and extracted:
+                st.session_state.explanation = gen_explanation(extracted[:2000])
+                st.rerun()
+        # Pesquisa Wikipedia
+        wiki_query = st.text_input("Pesquisar na Wikipedia:")
+        if wiki_query and st.button("Buscar"):
+            try:
+                wiki_text = wikipedia.summary(wiki_query, sentences=10)
+                st.session_state.explanation = wiki_text
+                st.rerun()
+            except:
+                st.error("Tópico não encontrado.")
+        # Entrada padrão
+        topic = st.text_input("Ou digite um assunto:", key="topic")
         if st.button("Gerar Explicação") and topic:
             st.session_state.explanation = gen_explanation(topic)
             add_xp(5)
             st.rerun()
         if st.session_state.explanation:
             st.markdown(f'<div class="explanation-box">{st.session_state.explanation}</div>', unsafe_allow_html=True)
-            if st.button("🔊 Ouvir Explicação"):
-                audio = text_to_speech(st.session_state.explanation)
-                st.audio(audio, format='audio/mp3')
-            d = st.selectbox("Dificuldade",["Fácil","Médio","Difícil"],index=1)
-            n = st.number_input("Perguntas",1,20,5)
+            if st.button("🔊 Ouvir"): st.audio(text_to_speech(st.session_state.explanation), format='audio/mp3')
+            # Resumão
+            if st.button("Gerar Resumão"):
+                resumo = gen_resumo(st.session_state.explanation)
+                st.markdown(f'**Resumo:** {resumo}')
+            # Quiz rápido
+            d = st.selectbox("Dificuldade", ["Fácil","Médio","Difícil"], index=1)
+            n = st.number_input("Perguntas", 1,20,5)
             if st.button("Criar Quiz"):
                 st.session_state.quiz_questions = gen_quiz(st.session_state.explanation, d, n)
-                st.session_state.quiz_index = 0
-                st.rerun()
+                st.session_state.quiz_index = 0; st.session_state.quiz_active = True; st.rerun()
 
-    with tab2:
-        if st.session_state.quiz_active or st.session_state.quiz_questions:
-            show_quiz()
-        else:
-            st.info("Crie um quiz na aba Ensinar.")
-        if st.session_state.flashcards:
-            show_flashcards()
+    # Aba Aula Completa
+    with tabs[1]:
+        st.subheader("🎓 Aula Completa (explicação + quiz + flashcards)")
+        top_aula = st.text_input("Tópico:", key="aula_topic")
+        if st.button("Iniciar Aula Completa") and top_aula:
+            with st.spinner("Gerando aula..."):
+                exp = gen_explanation(top_aula)
+                st.markdown(exp)
+                add_xp(5)
+                quiz = gen_quiz(exp, "médio", 5)
+                if quiz:
+                    st.session_state.quiz_questions = quiz
+                    st.session_state.quiz_index = 0
+                    st.session_state.quiz_score = 0
+                    st.session_state.quiz_active = True
+                    st.rerun()
+        if st.session_state.quiz_active and st.session_state.quiz_questions:
+            show_quiz(st.session_state.quiz_questions)
 
-    with tab3:
-        primata_style = st.radio("Estilo do Macaco:", ["Normal", "Rapper", "Conspiração", "Shakespeare"], index=0)
+    # Aba Quiz
+    with tabs[2]:
+        st.subheader("🧠 Modos de Quiz")
+        quiz_mode = st.radio("Escolha o modo:", ["Normal", "Caótico (V/F)", "Maratona de Revisão"])
+        if quiz_mode == "Normal":
+            if st.session_state.quiz_active and st.session_state.quiz_questions:
+                show_quiz(st.session_state.quiz_questions)
+            else:
+                st.info("Crie um quiz primeiro (use a aba Estudar).")
+        elif quiz_mode == "Caótico (V/F)":
+            if "caotico_questions" not in st.session_state: st.session_state.caotico_questions = []
+            top_caos = st.text_input("Tópico para quiz caótico:")
+            if st.button("Gerar Quiz Caótico") and top_caos:
+                prompt = f"Crie 10 afirmações sobre '{top_caos}', metade verdadeiras e metade falsas, misturadas. Retorne JSON com 'questions' (array de objetos com 'afirmacao' e 'verdadeiro' booleano)."
+                resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+                    messages=[{"role":"user","content": prompt}], temperature=0.9, max_tokens=1000)
+                cont = resp.choices[0].message.content.strip()
+                if cont.startswith("```"): cont = cont[cont.find("\n"):].rstrip("```").strip()
+                try:
+                    caos = json.loads(cont).get("questions", [])
+                    st.session_state.caotico_questions = caos
+                    st.session_state.caos_idx = 0; st.session_state.caos_score = 0
+                except:
+                    st.error("Erro ao gerar.")
+            if st.session_state.caotico_questions:
+                idx = st.session_state.caos_idx
+                if idx < len(st.session_state.caotico_questions):
+                    q = st.session_state.caotico_questions[idx]
+                    st.write(q['afirmacao'])
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Verdadeiro"):
+                            if q['verdadeiro']: st.session_state.caos_score += 1; st.success("Correto!")
+                            else: st.error("Falso!")
+                            st.session_state.caos_idx += 1; st.rerun()
+                    with col2:
+                        if st.button("❌ Falso"):
+                            if not q['verdadeiro']: st.session_state.caos_score += 1; st.success("Correto!")
+                            else: st.error("Verdadeiro!")
+                            st.session_state.caos_idx += 1; st.rerun()
+                else:
+                    st.success(f"Fim! Acertos: {st.session_state.caos_score}/{len(st.session_state.caotico_questions)}")
+        else:  # Maratona de Revisão
+            all_due = load_questions()  # já filtra por USER_ID
+            due = [q for q in all_due if q.get("next_review") and q["next_review"] <= date.today().isoformat()]
+            if due:
+                if st.button(f"Revisar {len(due)} questões pendentes"):
+                    st.session_state.quiz_questions = due
+                    st.session_state.quiz_index = 0; st.session_state.quiz_score = 0
+                    st.session_state.quiz_active = True
+                    st.rerun()
+                if st.session_state.quiz_active and st.session_state.quiz_questions:
+                    show_quiz(st.session_state.quiz_questions)
+            else:
+                st.success("Nenhuma revisão pendente!")
+
+    # Aba Primata (expandida)
+    with tabs[3]:
+        estilos = ["Normal","Rapper","Conspiração","Shakespeare","Stand-Up","ELI5","Poesia"]
+        estilo = st.selectbox("Estilo do Macaco:", estilos)
         pt = st.text_input("Tópico primata:", key="ptopic")
         if st.button("Macaco Sábio") and pt:
-            style_map = {"Normal":"normal","Rapper":"rapper","Conspiração":"conspiracy","Shakespeare":"shakespeare"}
-            st.session_state.primata_explanation = gen_primata(pt, style_map[primata_style])
+            chave = estilo.lower().replace("-","")
+            st.session_state.primata_explanation = gen_primata(pt, chave)
             add_xp(10)
             st.rerun()
         if st.session_state.primata_explanation:
             st.markdown(f'<div class="primata-box">{st.session_state.primata_explanation}</div>', unsafe_allow_html=True)
 
-    with tab4:
-        st.subheader("✍️ Modo Redação Assistida")
+    # Aba Mapa Mental
+    with tabs[4]:
+        st.subheader("🗺️ Mapa Mental")
+        mapa_topic = st.text_input("Tópico:", key="mapa")
+        if st.button("Gerar Mapa") and mapa_topic:
+            with st.spinner("Desenhando..."):
+                render_mapa_mental(mapa_topic)
+
+    # Aba Debate
+    with tabs[5]:
+        st.subheader("⚖️ Debate de Especialistas")
+        debate_topic = st.text_input("Tópico do debate:", key="debate")
+        if st.button("Iniciar Debate") and debate_topic:
+            with st.spinner("Debatendo..."):
+                show_debate(debate_topic)
+
+    # Aba História Interativa
+    with tabs[6]:
+        st.subheader("📖 História Interativa (RPG)")
+        hist_topic = st.text_input("Tema da história:", key="hist")
+        if st.button("Começar História") and hist_topic:
+            st.session_state.story_state = None
+            with st.spinner("Criando universo..."):
+                show_historia_interativa(hist_topic)
+        elif st.session_state.story_state:
+            show_historia_interativa(st.session_state.story_state["topic"])
+
+    # Aba Música
+    with tabs[7]:
+        st.subheader("🎵 Gerador de Música de Estudo")
+        musica_topic = st.text_input("Tópico da música:", key="musica")
+        if st.button("Compor Letra") and musica_topic:
+            letra = gen_musica(musica_topic)
+            st.markdown(f"**Letra:**\n{letra}")
+            # Áudio lo-fi (link público de exemplo)
+            st.audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", format="audio/mp3")
+            st.caption("Batida lo-fi de fundo (exemplo)")
+
+    # Aba Redação (existente)
+    with tabs[8]:
+        st.subheader("✍️ Redação Assistida")
         redacao = st.text_area("Escreva sua redação:", height=200)
         if st.button("Avaliar Redação") and redacao:
             avaliacao = gen_redacao_avaliacao(redacao)
             st.markdown(f"### Avaliação da IA:\n{avaliacao}")
             add_xp(15)
 
-    with tab5:
-        st.subheader("👨‍🏫 Modo Professor vs Aluno")
+    # Aba Professor vs Aluno
+    with tabs[9]:
+        st.subheader("👨‍🏫 Professor vs Aluno")
         ptopic_prof = st.text_input("Tópico para aula:", key="prof_topic")
-        if "prof_questions" not in st.session_state:
-            st.session_state.prof_questions = []
+        if "prof_questions" not in st.session_state: st.session_state.prof_questions = []
         if st.button("Iniciar Aula") and ptopic_prof:
-            st.session_state.prof_questions = gen_quiz(gen_explanation(ptopic_prof), "médio", 5)
+            exp = gen_explanation(ptopic_prof)
+            st.session_state.prof_questions = gen_quiz(exp, "médio", 5)
             st.session_state.prof_idx = 0
         if st.session_state.prof_questions:
             idx = st.session_state.prof_idx
             if idx < len(st.session_state.prof_questions):
                 q = st.session_state.prof_questions[idx]
-                st.write(f"**Pergunta:** {q['question']}")
-                user_answer = st.text_input("Sua resposta:", key=f"prof_ans_{idx}")
+                st.write(q['question'])
+                ans = st.text_input("Sua resposta:", key=f"prof_ans_{idx}")
                 if st.button("Enviar Resposta"):
-                    correct = q['correct_answer']
-                    if user_answer.lower() == correct.lower():
-                        st.success("Correto!"); add_xp(5)
-                    else:
-                        st.error(f"Errado. Resposta correta: {correct}")
-                        st.info(f"Explicação: {q['explanation']}")
-                    st.session_state.prof_idx += 1
-                    st.rerun()
-            else:
-                st.success("Aula concluída!")
+                    if ans.strip().lower() == q['correct_answer'].lower(): st.success("Correto!"); add_xp(5)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}"); st.info(q['explanation'])
+                    st.session_state.prof_idx += 1; st.rerun()
+            else: st.success("Aula concluída!")
 
-    with tab6:
+    # Aba Progresso (Dashboard turbinado)
+    with tabs[10]:
         st.subheader("📊 Seu Progresso")
         data = load_user_data()
-        st.metric("Total de XP", data["xp"])
-        st.metric("Streak Atual", data["streak"])
-        st.write("Conquistas:", data["achievements"])
-        due = [q for q in load_questions() if q.get("next_review", "") <= date.today().isoformat()]
-        st.metric("Questões para Revisar Hoje", len(due))
+        col1, col2, col3 = st.columns(3)
+        col1.metric("XP", data["xp"])
+        col2.metric("Streak", data["streak"])
+        col3.metric("Títulos", len(data["titulos"]))
+        st.write("🏆 Conquistas:", ", ".join(data["achievements"]) if data["achievements"] else "Nenhuma")
 
-    with tab7:
+        # Gráfico de evolução
+        logs = conn.execute("SELECT date, SUM(xp_gained) FROM xp_log WHERE user_id=? GROUP BY date ORDER BY date", (USER_ID,)).fetchall()
+        if logs:
+            df = pd.DataFrame(logs, columns=["Data", "XP ganho"])
+            df['Data'] = pd.to_datetime(df['Data'])
+            st.line_chart(df.set_index("Data"))
+
+        # Calendário de atividade
+        if logs:
+            df['Data'] = pd.to_datetime(df['Data'])
+            df['count'] = 1
+            # Heatmap estilo calendário
+            fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
+            st.plotly_chart(fig)
+
+        # Ranking semanal
+        ranking = conn.execute("""
+            SELECT user_id, SUM(xp_gained) as total_xp
+            FROM xp_log
+            WHERE date >= date('now','-7 days')
+            GROUP BY user_id ORDER BY total_xp DESC LIMIT 10
+        """).fetchall()
+        if ranking:
+            st.subheader("🏅 Ranking Semanal (Top 10)")
+            df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP na Semana"])
+            st.table(df_rank)
+
+        # Análise por tópico
+        top_topics = conn.execute("SELECT topic, SUM(quizzes) as total_quizzes, SUM(errors) as total_errors FROM topics WHERE user_id=? GROUP BY topic", (USER_ID,)).fetchall()
+        if top_topics:
+            st.subheader("📚 Tópicos Estudados")
+            df_top = pd.DataFrame(top_topics, columns=["Tópico", "Quizzes", "Erros"])
+            df_top["Taxa de Erro"] = df_top["Erros"] / df_top["Quizzes"] * 100
+            st.dataframe(df_top)
+
+    # Aba Diário (existente, com ajuste para registrar tópico)
+    with tabs[11]:
         st.subheader("📅 Desafio Diário")
         data = load_user_data()
         today = date.today().isoformat()
@@ -418,7 +772,7 @@ def main():
             idx = st.session_state.daily_idx
             if idx < len(st.session_state.daily_questions):
                 q = st.session_state.daily_questions[idx]
-                st.write(f"**{q['question']}**")
+                st.write(q['question'])
                 ans = st.radio("Opções" if q["type"]=="multiple_choice" else "V/F",
                                q['options'] if q["type"]=="multiple_choice" else ["Verdadeiro","Falso"],
                                index=None, key=f"daily_{idx}")

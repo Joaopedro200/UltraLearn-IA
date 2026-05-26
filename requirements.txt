@@ -54,3 +54,6 @@ groq
 gtts
 fpdf
 libsql
+graphviz
+tesseract-ocr
+tesseract-ocr-por
