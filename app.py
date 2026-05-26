@@ -3,7 +3,7 @@
 UltraLearn IA – Titanium Edition com LOGIN e RANKING GLOBAL
 """
 import streamlit as st
-import json, os, random, io, base64, hashlib, uuid, re
+import json, os, random, io, base64, hashlib
 from datetime import datetime, timedelta, date
 from groq import Groq
 from gtts import gTTS
@@ -30,7 +30,9 @@ if not TURSO_URL or not TURSO_TOKEN:
 conn = libsql.connect("ultralearn.db", sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
 conn.sync()
 
-# Criação das tabelas (incluindo users)
+# ---------- Criação das tabelas (sem FOREIGN KEY para evitar erros) ----------
+conn.execute("PRAGMA foreign_keys = ON")
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
@@ -40,6 +42,7 @@ conn.execute("""
         created_at TEXT DEFAULT (datetime('now'))
     )
 """)
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS user_data (
         user_id TEXT PRIMARY KEY,
@@ -47,10 +50,10 @@ conn.execute("""
         streak INTEGER DEFAULT 0,
         last_daily TEXT,
         achievements TEXT DEFAULT '[]',
-        titulos TEXT DEFAULT '[]',
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        titulos TEXT DEFAULT '[]'
     )
 """)
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,37 +65,37 @@ conn.execute("""
         explanation TEXT,
         interval INTEGER DEFAULT 1,
         ease_factor REAL DEFAULT 2.5,
-        next_review TEXT,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        next_review TEXT
     )
 """)
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS xp_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
         date TEXT,
-        xp_gained INTEGER,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        xp_gained INTEGER
     )
 """)
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS topics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
         topic TEXT,
         quizzes INTEGER DEFAULT 0,
-        errors INTEGER DEFAULT 0,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        errors INTEGER DEFAULT 0
     )
 """)
+
 conn.execute("""
     CREATE TABLE IF NOT EXISTS challenges (
         id TEXT PRIMARY KEY,
         quiz_json TEXT,
-        creator_user_id TEXT,
-        FOREIGN KEY (creator_user_id) REFERENCES users(user_id)
+        creator_user_id TEXT
     )
 """)
+
 conn.commit()
 
 # ---------- Funções de autenticação ----------
@@ -107,8 +110,8 @@ def criar_usuario(user_id, password, avatar="🧑", bio=""):
     pwd_hash = hash_password(password)
     conn.execute("INSERT INTO users (user_id, password_hash, avatar, bio) VALUES (?, ?, ?, ?)",
                  (user_id, pwd_hash, avatar, bio))
-    # Cria registro em user_data
-    conn.execute("INSERT INTO user_data (user_id, achievements, titulos) VALUES (?, '[]', '[]')", (user_id,))
+    conn.commit()
+    conn.execute("INSERT INTO user_data (user_id) VALUES (?)", (user_id,))
     conn.commit()
     return True
 
@@ -334,7 +337,7 @@ def update_spaced_repetition(question, quality):
         )
     conn.commit()
 
-# ---------- Funções IA (mesmas da versão anterior, sem alterações) ----------
+# ---------- Funções IA ----------
 def gen_explanation(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
         messages=[{"role":"user","content":f"Explique '{topic}' em português, 3 parágrafos detalhados."}], temperature=0.7, max_tokens=1500)
@@ -455,6 +458,13 @@ def export_quiz_pdf(questions):
         else: pdf.cell(0, 10, "Verdadeiro ou Falso", ln=True)
         pdf.cell(0, 10, f"Resposta: {q['correct_answer']}", ln=True); pdf.ln(5)
     return pdf.output(dest="S").encode("latin-1")
+
+def text_to_speech(text):
+    tts = gTTS(text, lang='pt')
+    fp = io.BytesIO()
+    tts.write_to_fp(fp)
+    fp.seek(0)
+    return fp
 
 # ---------- Interface principal (após login) ----------
 def main_app():
@@ -610,13 +620,185 @@ def main_app():
                     show_quiz(st.session_state.quiz_questions)
             else: st.success("Nenhuma revisão pendente!")
 
-    # As demais abas permanecem funcionalmente iguais, apenas usando a sessão atual.
-    # (Por brevidade, manterei o restante idêntico à versão anterior, adaptado para usar USER_ID)
+    # Aba Primata
+    with tabs[3]:
+        estilos = ["Normal","Rapper","Conspiração","Shakespeare","Stand-Up","ELI5","Poesia"]
+        estilo = st.selectbox("Estilo do Macaco:", estilos)
+        pt = st.text_input("Tópico primata:", key="ptopic")
+        if st.button("Macaco Sábio") and pt:
+            chave = estilo.lower().replace("-","")
+            st.session_state.primata_explanation = gen_primata(pt, chave)
+            add_xp(10); st.rerun()
+        if st.session_state.primata_explanation:
+            st.markdown(f'<div class="primata-box">{st.session_state.primata_explanation}</div>', unsafe_allow_html=True)
 
-    # ... (código das abas 3 a 11, sem alterações estruturais, apenas com referência a USER_ID já corrigida)
-    # Para não alongar demais, vou omitir o restante aqui e informar que está todo no código final.
+    # Aba Mapa Mental
+    with tabs[4]:
+        st.subheader("🗺️ Mapa Mental")
+        mapa_topic = st.text_input("Tópico:", key="mapa")
+        if st.button("Gerar Mapa") and mapa_topic:
+            data = gen_mapa_mental(mapa_topic)
+            if data:
+                g = graphviz.Digraph()
+                for node in data.get("nodes", []): g.node(node)
+                for edge in data.get("edges", []):
+                    if len(edge) == 2: g.edge(edge[0], edge[1])
+                st.graphviz_chart(g)
+            else: st.error("Não foi possível gerar o mapa mental.")
 
-# ---------- Execução ----------
+    # Aba Debate
+    with tabs[5]:
+        st.subheader("⚖️ Debate de Especialistas")
+        debate_topic = st.text_input("Tópico do debate:", key="debate")
+        if st.button("Iniciar Debate") and debate_topic:
+            debate_text = gen_debate(debate_topic)
+            st.markdown(debate_text)
+            col1, col2, col3 = st.columns([1,1,1])
+            with col1:
+                if st.button("👍 Prós"): st.success("Você votou nos Prós!")
+            with col2:
+                if st.button("👎 Contras"): st.success("Você votou nos Contras!")
+            with col3:
+                if st.button("🤝 Empate"): st.success("Você considerou empate!")
+
+    # Aba História Interativa
+    with tabs[6]:
+        st.subheader("📖 História Interativa (RPG)")
+        hist_topic = st.text_input("Tema da história:", key="hist")
+        if st.button("Começar História") and hist_topic:
+            st.session_state.story_state = None
+            hist_text = gen_historia_interativa(hist_topic)
+            st.session_state.story_state = {"text": hist_text, "topic": hist_topic}
+            st.rerun()
+        if st.session_state.story_state:
+            st.write(st.session_state.story_state["text"])
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("Opção A"):
+                    st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "A")
+                    st.rerun()
+            with col2:
+                if st.button("Opção B"):
+                    st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "B")
+                    st.rerun()
+            with col3:
+                if st.button("Opção C"):
+                    st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "C")
+                    st.rerun()
+            if st.button("Reiniciar História"):
+                st.session_state.story_state = None; st.rerun()
+
+    # Aba Música
+    with tabs[7]:
+        st.subheader("🎵 Gerador de Música de Estudo")
+        musica_topic = st.text_input("Tópico da música:", key="musica")
+        if st.button("Compor Letra") and musica_topic:
+            letra = gen_musica(musica_topic)
+            st.markdown(f"**Letra:**\n{letra}")
+            st.audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", format="audio/mp3")
+
+    # Aba Redação
+    with tabs[8]:
+        st.subheader("✍️ Redação Assistida")
+        redacao = st.text_area("Escreva sua redação:", height=200)
+        if st.button("Avaliar Redação") and redacao:
+            avaliacao = gen_redacao_avaliacao(redacao)
+            st.markdown(f"### Avaliação da IA:\n{avaliacao}")
+            add_xp(15)
+
+    # Aba Professor vs Aluno
+    with tabs[9]:
+        st.subheader("👨‍🏫 Professor vs Aluno")
+        ptopic_prof = st.text_input("Tópico para aula:", key="prof_topic")
+        if "prof_questions" not in st.session_state: st.session_state.prof_questions = []
+        if st.button("Iniciar Aula") and ptopic_prof:
+            exp = gen_explanation(ptopic_prof)
+            st.session_state.prof_questions = gen_quiz(exp, "médio", 5)
+            st.session_state.prof_idx = 0
+        if st.session_state.prof_questions:
+            idx = st.session_state.prof_idx
+            if idx < len(st.session_state.prof_questions):
+                q = st.session_state.prof_questions[idx]
+                st.write(q['question'])
+                ans = st.text_input("Sua resposta:", key=f"prof_ans_{idx}")
+                if st.button("Enviar Resposta"):
+                    if ans.strip().lower() == q['correct_answer'].lower(): st.success("Correto!"); add_xp(5)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}"); st.info(q['explanation'])
+                    st.session_state.prof_idx += 1; st.rerun()
+            else: st.success("Aula concluída!")
+
+    # Aba Progresso
+    with tabs[10]:
+        st.subheader("📊 Seu Progresso")
+        data = load_user_data()
+        col1, col2, col3 = st.columns(3)
+        col1.metric("XP", data["xp"])
+        col2.metric("Streak", data["streak"])
+        col3.metric("Títulos", len(data["titulos"]))
+        st.write("🏆 Conquistas:", ", ".join(data["achievements"]) if data["achievements"] else "Nenhuma")
+
+        logs = conn.execute("SELECT date, SUM(xp_gained) FROM xp_log WHERE user_id=? GROUP BY date ORDER BY date", (USER_ID,)).fetchall()
+        if logs:
+            df = pd.DataFrame(logs, columns=["Data", "XP ganho"])
+            df['Data'] = pd.to_datetime(df['Data'])
+            st.line_chart(df.set_index("Data"))
+            fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
+            st.plotly_chart(fig)
+
+        ranking = conn.execute("""
+            SELECT user_id, SUM(xp_gained) as total_xp
+            FROM xp_log
+            WHERE date >= date('now','-7 days')
+            GROUP BY user_id ORDER BY total_xp DESC LIMIT 10
+        """).fetchall()
+        if ranking:
+            st.subheader("🏅 Ranking Semanal (Top 10)")
+            df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP na Semana"])
+            st.table(df_rank)
+
+        top_topics = conn.execute("SELECT topic, SUM(quizzes) as total_quizzes, SUM(errors) as total_errors FROM topics WHERE user_id=? GROUP BY topic", (USER_ID,)).fetchall()
+        if top_topics:
+            st.subheader("📚 Tópicos Estudados")
+            df_top = pd.DataFrame(top_topics, columns=["Tópico", "Quizzes", "Erros"])
+            df_top["Taxa de Erro"] = df_top["Erros"] / df_top["Quizzes"] * 100
+            st.dataframe(df_top)
+
+    # Aba Diário
+    with tabs[11]:
+        st.subheader("📅 Desafio Diário")
+        data = load_user_data()
+        today = date.today().isoformat()
+        if data["last_daily"] != today:
+            daily_topic = random.choice(["Inteligência Artificial", "História do Brasil", "Sistema Solar", "Mitologia Grega"])
+            st.markdown(f"### Tópico do dia: **{daily_topic}**")
+            if st.button("Gerar Quiz do Dia"):
+                exp = gen_explanation(daily_topic)
+                st.session_state.daily_questions = gen_quiz(exp, "médio", 3)
+                st.session_state.daily_idx = 0; st.rerun()
+        else:
+            st.success(f"Desafio de hoje já concluído! Streak: {data['streak']} dias")
+        if "daily_questions" in st.session_state and st.session_state.daily_questions:
+            idx = st.session_state.daily_idx
+            if idx < len(st.session_state.daily_questions):
+                q = st.session_state.daily_questions[idx]
+                st.write(q['question'])
+                ans = st.radio("Opções" if q["type"]=="multiple_choice" else "V/F",
+                               q['options'] if q["type"]=="multiple_choice" else ["Verdadeiro","Falso"],
+                               index=None, key=f"daily_{idx}")
+                if st.button("Responder Diário") and ans:
+                    user = ans.split('.')[0].strip() if q["type"]=="multiple_choice" else ("Verdadeiro" if ans=="Verdadeiro" else "Falso")
+                    if user == q['correct_answer']:
+                        st.success("Correto!"); add_xp(20)
+                    else:
+                        st.error(f"Errado. Resposta: {q['correct_answer']}")
+                    st.session_state.daily_idx += 1
+                    if st.session_state.daily_idx >= len(st.session_state.daily_questions):
+                        update_daily_streak()
+                        st.balloons()
+                        st.success("Desafio diário concluído! +20 XP")
+                    st.rerun()
+
+# ---------- Execução final ----------
 if __name__ == "__main__":
     if st.session_state.logged_in:
         main_app()
