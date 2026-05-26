@@ -407,18 +407,14 @@ if not st.session_state.logged_in:
             cookies["ultralearn_token"] = ""
             cookies.save()
 
-# ---------- Tela de login (com espaços para imagens) ----------
+# ---------- Tela de login ----------
 def tela_login():
-    # URLs de imagens personalizáveis (substitua pelas suas)
-    LOGO_URL = "https://i.imgur.com/cfSvLdE.png"        # ← coloque aqui a URL da sua logo
-    MASCOT_URL = "https://i.imgur.com/dDnr8pn.png"   # ← coloque aqui a URL do mascote
+    LOGO_URL = "https://i.imgur.com/cfSvLdE.png"
+    MASCOT_URL = "https://i.imgur.com/dDnr8pn.png"
 
     col1, col2 = st.columns([1, 2])
     with col1:
-        if LOGO_URL and "seu-logo" not in LOGO_URL:
-            st.image(LOGO_URL, width=250)
-        else:
-            st.markdown("# 🧠")
+        st.image(LOGO_URL, width=250)
     with col2:
         st.markdown("""
         <div style="margin-top: 2rem;">
@@ -581,6 +577,12 @@ def update_spaced_repetition(question, quality):
 def gen_explanation(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
         messages=[{"role":"user","content":f"Explique '{topic}' em português, 3 parágrafos detalhados."}], temperature=0.7, max_tokens=1500)
+    return resp.choices[0].message.content.strip()
+
+def gen_continuacao(topic, texto_anterior):
+    prompt = f"Com base na explicação anterior sobre '{topic}':\n{texto_anterior}\n\nForneça mais detalhes, curiosidades e aprofundamentos sobre o mesmo tópico. Continue a explicação de forma fluida e aprofundada, sem repetir o que já foi dito."
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}], temperature=0.8, max_tokens=2000)
     return resp.choices[0].message.content.strip()
 
 def gen_resumo(text):
@@ -750,9 +752,9 @@ def main_app():
         if k not in st.session_state: st.session_state[k] = v
 
     with st.sidebar:
-        # Logo na sidebar (substitua pela sua URL)
-        LOGO_SIDEBAR_URL = "https://i.imgur.com/cfSvLdE.png"  # ← coloque aqui a URL da sua logo
-        if LOGO_SIDEBAR_URL and "seu-logo" not in LOGO_SIDEBAR_URL:
+        # Logo na sidebar
+        LOGO_SIDEBAR_URL = "https://i.imgur.com/cfSvLdE.png"
+        if LOGO_SIDEBAR_URL:
             st.image(LOGO_SIDEBAR_URL, width=200)
         else:
             st.markdown("## 🧠 UltraLearn IA")
@@ -832,7 +834,7 @@ def main_app():
         "✍️ Redação", "👨‍🏫 Professor", "📊 Progresso", "📅 Diário"
     ])
 
-    # Aba Estudar
+    # Aba Estudar (com continuação)
     with tabs[0]:
         st.subheader("Modo de Estudo")
         uploaded_pdf = st.file_uploader("Envie um PDF", type="pdf")
@@ -841,26 +843,31 @@ def main_app():
             text = " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
             st.text_area("Texto extraído", text, height=100)
             if st.button("Gerar Explicação do PDF") and text:
-                st.session_state.explanation = gen_explanation(text[:3000]); st.rerun()
+                st.session_state.explanation = gen_explanation(text[:3000]); st.session_state.topic = "PDF"; st.rerun()
         uploaded_img = st.file_uploader("Ou envie uma imagem com texto", type=["png","jpg","jpeg"])
         if uploaded_img:
             img = Image.open(uploaded_img)
             extracted = pytesseract.image_to_string(img, lang='por')
             st.text_area("Texto extraído", extracted, height=100)
             if st.button("Gerar Explicação da Imagem") and extracted:
-                st.session_state.explanation = gen_explanation(extracted[:2000]); st.rerun()
+                st.session_state.explanation = gen_explanation(extracted[:2000]); st.session_state.topic = "Imagem"; st.rerun()
         wiki_query = st.text_input("Pesquisar na Wikipedia:")
         if wiki_query and st.button("Buscar"):
             try:
                 wiki_text = wikipedia.summary(wiki_query, sentences=10)
-                st.session_state.explanation = wiki_text; st.rerun()
+                st.session_state.explanation = wiki_text; st.session_state.topic = wiki_query; st.rerun()
             except: st.error("Tópico não encontrado.")
-        topic = st.text_input("Ou digite um assunto:", key="topic")
+        topic = st.text_input("Ou digite um assunto:", key="topic_input")
         if st.button("Gerar Explicação") and topic:
-            st.session_state.explanation = gen_explanation(topic); add_xp(5); st.rerun()
+            st.session_state.explanation = gen_explanation(topic); st.session_state.topic = topic; add_xp(5); st.rerun()
         if st.session_state.explanation:
             st.markdown(f'<div class="explanation-box">{st.session_state.explanation}</div>', unsafe_allow_html=True)
             if st.button("🔊 Ouvir"): st.audio(text_to_speech(st.session_state.explanation), format='audio/mp3')
+            if st.button("🧠 Quero saber mais"):
+                with st.spinner("Aprofundando o conhecimento..."):
+                    continuation = gen_continuacao(st.session_state.topic, st.session_state.explanation)
+                    st.session_state.explanation += "\n\n" + continuation
+                st.rerun()
             if st.button("Gerar Resumão"):
                 st.markdown(f"**Resumo:** {gen_resumo(st.session_state.explanation)}")
             d = st.selectbox("Dificuldade", ["Fácil","Médio","Difícil"], index=1)
