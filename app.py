@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Premium Edition COMPLETA (Visual incrível + Continuação Infinita + Todas as Abas)
+UltraLearn IA – Organizado com Abas de Loja e Missões
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid, time
@@ -38,7 +38,6 @@ conn.sync()
 
 # ---------- Criação das tabelas ----------
 conn.execute("PRAGMA foreign_keys = ON")
-
 conn.execute("""CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, password_hash TEXT NOT NULL, avatar TEXT DEFAULT '🧑', bio TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')))""")
 conn.execute("""CREATE TABLE IF NOT EXISTS user_data (user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, last_daily TEXT, achievements TEXT DEFAULT '[]', titulos TEXT DEFAULT '[]', unlocked_avatars TEXT DEFAULT '["🧑"]', unlocked_frames TEXT DEFAULT '["⬜"]', frame_equipped TEXT DEFAULT '⬜')""")
 conn.execute("""CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, question TEXT, type TEXT, options TEXT, correct_answer TEXT, explanation TEXT, interval INTEGER DEFAULT 1, ease_factor REAL DEFAULT 2.5, next_review TEXT)""")
@@ -130,8 +129,8 @@ def inject_css(theme="dark", font_size=16, daltonic=None):
     .main-header {{background: {t["header_bg"]}; padding: 2.5rem 2rem; border-radius: 32px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 40px -20px rgba(0,0,0,0.4); backdrop-filter: blur(20px); position: relative; overflow: hidden;}}
     .main-header::before {{content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); animation: rotate 20s linear infinite;}}
     @keyframes rotate {{from {{transform: rotate(0deg);}} to {{transform: rotate(360deg);}}}}
-    .explanation-box, .quiz-card, .debate-card, .primata-box {{background: {t["card_bg"]}; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 2rem; margin: 1.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.3s ease;}}
-    .quiz-card:hover, .explanation-box:hover {{transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.5);}}
+    .explanation-box, .quiz-card, .debate-card, .primata-box, .mission-card, .shop-card {{background: {t["card_bg"]}; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 2rem; margin: 1.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.3s ease;}}
+    .quiz-card:hover, .explanation-box:hover, .shop-card:hover {{transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.5);}}
     div.stButton > button {{border-radius: 14px; font-weight: 600; padding: 0.7rem 2.5rem; border: none; background: {t["button_bg"]}; color: white; letter-spacing: 0.5px; text-transform: uppercase; font-size: 0.9rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3);}}
     div.stButton > button:hover {{transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.4);}}
     .feedback-correct {{background: rgba(34,197,94,0.15); border-left: 4px solid #22c55e; padding: 1rem; border-radius: 12px; margin: 1rem 0; color: #bbf7d0;}}
@@ -147,6 +146,7 @@ def inject_css(theme="dark", font_size=16, daltonic=None):
     .moldura-🟪 {{border: 3px solid #a855f7; box-shadow: 0 0 10px #a855f7;}} .moldura-🟧 {{border: 3px solid #f97316; box-shadow: 0 0 10px #f97316;}}
     .moldura-🔲 {{border: 3px dashed #cbd5e1;}} .moldura-🏁 {{border: 4px double #ffffff;}}
     .moldura-💠 {{border: 3px dotted #06b6d4;}} .moldura-🌀 {{border: 3px solid; border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1) 1;}}
+    .mission-progress {{height: 10px; border-radius: 10px; background: {t["accent"]};}}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
     </style>""", unsafe_allow_html=True)
 
@@ -361,17 +361,18 @@ def export_quiz_pdf(questions):
 def text_to_speech(text):
     tts = gTTS(text, lang='pt'); fp = io.BytesIO(); tts.write_to_fp(fp); fp.seek(0); return fp
 
-# ---------- Interface ----------
+# ---------- Interface principal ----------
 def main_app():
     defaults = {"explanation":"","topic":"","primata_explanation":"","quiz_questions":[],"quiz_index":0,"quiz_score":0,"quiz_active":False,"quiz_feedback":None,"quiz_mode":"normal","flashcards":[],"theme":"dark","pomodoro_seconds":0,"pomodoro_active":False,"font_size":16,"daltonic":None,"story_state":None,"prof_questions":[],"prof_idx":0,"daily_questions":[],"daily_idx":0,"caotico_questions":[],"caos_idx":0,"caos_score":0,"lives":3,"time_left":10}
     for k,v in defaults.items():
         if k not in st.session_state: st.session_state[k] = v
     gerar_missoes_diarias()
 
-    # Sidebar
+    # Sidebar minimalista
     with st.sidebar:
         st.image("https://i.imgur.com/cfSvLdE.png", width=200)
-        st.markdown("---"); st.markdown("## 👤 Meu Perfil")
+        st.markdown("---")
+        st.markdown("## 👤 Meu Perfil")
         user_row = conn.execute("SELECT avatar, bio FROM users WHERE user_id=?",(USER_ID,)).fetchone()
         avatar, bio = user_row if user_row else ("🧑","")
         data = load_user_data()
@@ -385,54 +386,40 @@ def main_app():
             t = cookies.get("ultralearn_token")
             if t: remover_token(t)
             cookies["ultralearn_token"]=""; cookies.save(); st.session_state.logged_in=False; st.session_state.user_id=None; st.rerun()
-        st.markdown("---"); st.markdown("## 🛒 Loja de Avatares")
-        shop_av = conn.execute("SELECT avatar, price FROM avatar_shop WHERE avatar NOT IN (SELECT value FROM json_each(?))",(json.dumps(avatares),)).fetchall()
-        for av, pr in shop_av:
-            if st.button(f"{av} ({pr} XP)", key=f"buy_av_{av}"):
-                ok, msg = comprar_item("avatar", av)
-                if ok: st.success(msg); st.rerun()
-                else: st.error(msg)
-        if not shop_av: st.write("Todos desbloqueados!")
-        st.markdown("---"); st.markdown("## 🖼️ Loja de Molduras")
-        frames_unlocked = data["unlocked_frames"]
-        shop_fr = conn.execute("SELECT frame, price FROM frame_shop WHERE frame NOT IN (SELECT value FROM json_each(?))",(json.dumps(frames_unlocked),)).fetchall()
-        for fr, pr in shop_fr:
-            if st.button(f"{fr} ({pr} XP)", key=f"buy_fr_{fr}"):
-                ok, msg = comprar_item("frame", fr)
-                if ok: st.success(msg); st.rerun()
-                else: st.error(msg)
-        if not shop_fr: st.write("Todas desbloqueadas!")
-        if len(frames_unlocked)>1:
-            nova = st.selectbox("Equipar moldura", frames_unlocked, index=frames_unlocked.index(frame_eq) if frame_eq in frames_unlocked else 0)
-            if nova != frame_eq: equipar_moldura(nova); st.rerun()
-        st.markdown("---"); st.markdown("## ⚙️ Aparência")
+        st.markdown("---")
+        st.markdown("## ⚙️ Aparência")
         theme = st.selectbox("Tema", ["dark","light","ocean","sunset","forest","neon","marshmallow","midnight","aurora","coffee","cyberpunk"])
         font_size = st.slider("Fonte", 12, 24, st.session_state.font_size)
         daltonic = st.selectbox("Daltonismo", [None,"protanopia","deuteranopia","tritanopia"])
         inject_css(theme, font_size, daltonic)
-        st.markdown("---"); st.markdown("### ⏱️ Pomodoro")
+        st.markdown("---")
+        st.markdown("### ⏱️ Pomodoro")
         if st.button("Iniciar 25 min"): st.session_state.pomodoro_seconds=25*60; st.session_state.pomodoro_active=True
         if st.session_state.pomodoro_active and st.session_state.pomodoro_seconds>0:
             st.session_state.pomodoro_seconds-=1; m,s = divmod(st.session_state.pomodoro_seconds,60); st.metric("⏳ Pomodoro", f"{m:02d}:{s:02d}")
         elif st.session_state.pomodoro_active: st.sidebar.success("Pomodoro concluído!"); st.session_state.pomodoro_active=False
-        st.markdown("---"); data = load_user_data()
+        st.markdown("---")
+        data = load_user_data()
         st.metric("XP Total", data["xp"]); st.metric("Streak", f"{data['streak']} dias")
         st.write("🏅 Títulos:", ", ".join(data["titulos"]) if data["titulos"] else "Nenhum")
-        st.markdown("---"); st.markdown("### 🎯 Missões de Hoje")
-        today = date.today().isoformat()
-        for tipo, meta, prog, comp in conn.execute("SELECT mission_type, goal, progress, completed FROM missions WHERE user_id=? AND date=?",(USER_ID,today)).fetchall():
-            st.write(f"{'✅' if comp else '⬜'} {tipo}: {prog}/{meta}")
-        st.markdown("---"); st.markdown("## 🏅 Ranking Geral")
-        for _, row in pd.DataFrame(conn.execute("SELECT u.user_id, COALESCE(SUM(xp.xp_gained),0) FROM users u LEFT JOIN xp_log xp ON u.user_id=xp.user_id GROUP BY u.user_id ORDER BY 2 DESC").fetchall(), columns=["Usuário","XP"]).iterrows():
-            av = (conn.execute("SELECT avatar FROM users WHERE user_id=?",(row['Usuário'],)).fetchone() or ("🧑",))[0]
-            if st.button(f"{av} {row['Usuário']} ({row['XP']} XP)", key=f"rank_{row['Usuário']}"):
-                with st.expander(f"Perfil de {row['Usuário']}", expanded=True):
-                    pf = conn.execute("SELECT bio, achievements FROM user_data WHERE user_id=?",(row['Usuário'],)).fetchone()
-                    if pf: st.write(f"**Bio:** {pf[0]}"); st.write(f"🏆 Conquistas: {', '.join(json.loads(pf[1])) if pf[1] else 'Nenhuma'}")
-                    else: st.write("Perfil não encontrado.")
+        st.markdown("---")
+        st.markdown("## 🏅 Ranking Geral")
+        ranking = conn.execute("SELECT u.user_id, COALESCE(SUM(xp.xp_gained),0) FROM users u LEFT JOIN xp_log xp ON u.user_id=xp.user_id GROUP BY u.user_id ORDER BY 2 DESC").fetchall()
+        if ranking:
+            df_rank = pd.DataFrame(ranking, columns=["Usuário","XP"])
+            st.dataframe(df_rank, hide_index=True, use_container_width=True)
+        else:
+            st.write("Nenhum usuário ainda.")
 
     st.markdown('<div class="main-header"><h1>🧠 UltraLearn IA</h1><p>Domine qualquer assunto com inteligência artificial</p></div>', unsafe_allow_html=True)
-    tabs = st.tabs(["📖 Estudar","🎓 Aula Completa","🧠 Quiz","🐵 Primata","🗺️ Mapa Mental","⚖️ Debate","📖 História","🎵 Música","✍️ Redação","👨‍🏫 Professor","📊 Progresso","📅 Diário"])
+
+    # Abas reorganizadas: incluindo Loja e Missões
+    tabs = st.tabs([
+        "📖 Estudar","🎓 Aula Completa","🧠 Quiz","🐵 Primata",
+        "🗺️ Mapa Mental","⚖️ Debate","📖 História","🎵 Música",
+        "✍️ Redação","👨‍🏫 Professor","🛒 Loja","🎯 Missões",
+        "📊 Progresso","📅 Diário"
+    ])
 
     # Aba Estudar
     with tabs[0]:
@@ -613,8 +600,91 @@ def main_app():
                     st.session_state.prof_idx += 1; st.rerun()
             else: st.success("Aula concluída!")
 
-    # Aba Progresso
+    # 🆕 Aba Loja (avatares + molduras)
     with tabs[10]:
+        st.subheader("🛒 Loja de Personalização")
+        data = load_user_data()
+        tab_av, tab_fr = st.tabs(["👤 Avatares", "🖼️ Molduras"])
+
+        with tab_av:
+            st.markdown("### Avatares Disponíveis")
+            avatares = data["unlocked_avatars"]
+            shop_av = conn.execute("SELECT avatar, price FROM avatar_shop WHERE avatar NOT IN (SELECT value FROM json_each(?))", (json.dumps(avatares),)).fetchall()
+            if shop_av:
+                cols = st.columns(3)
+                for i, (av, price) in enumerate(shop_av):
+                    with cols[i % 3]:
+                        st.markdown(f"<div style='text-align:center; font-size:3rem;'>{av}</div>", unsafe_allow_html=True)
+                        if st.button(f"Comprar ({price} XP)", key=f"shop_av_{av}"):
+                            ok, msg = comprar_item("avatar", av)
+                            if ok: st.success(msg); st.rerun()
+                            else: st.error(msg)
+            else:
+                st.info("🎉 Você já desbloqueou todos os avatares!")
+
+        with tab_fr:
+            st.markdown("### Molduras Disponíveis")
+            frames_unlocked = data["unlocked_frames"]
+            frame_eq = data["frame_equipped"]
+            st.markdown(f"**Moldura equipada:** {frame_eq}")
+            shop_fr = conn.execute("SELECT frame, price FROM frame_shop WHERE frame NOT IN (SELECT value FROM json_each(?))", (json.dumps(frames_unlocked),)).fetchall()
+            if shop_fr:
+                cols = st.columns(3)
+                for i, (fr, price) in enumerate(shop_fr):
+                    with cols[i % 3]:
+                        st.markdown(f"<div class='moldura moldura-{fr}' style='text-align:center; font-size:2rem;'>{fr}</div>", unsafe_allow_html=True)
+                        if st.button(f"Comprar ({price} XP)", key=f"shop_fr_{fr}"):
+                            ok, msg = comprar_item("frame", fr)
+                            if ok: st.success(msg); st.rerun()
+                            else: st.error(msg)
+            else:
+                st.info("🎉 Você já desbloqueou todas as molduras!")
+            st.markdown("---")
+            st.markdown("### Equipar Moldura")
+            if len(frames_unlocked) > 1:
+                nova = st.selectbox("Escolha a moldura para equipar", frames_unlocked, index=frames_unlocked.index(frame_eq) if frame_eq in frames_unlocked else 0)
+                if nova != frame_eq:
+                    if st.button("Equipar"):
+                        equipar_moldura(nova); st.rerun()
+
+    # 🆕 Aba Missões
+    with tabs[11]:
+        st.subheader("🎯 Missões Diárias")
+        today = date.today().isoformat()
+        missoes = conn.execute("SELECT mission_type, goal, progress, completed FROM missions WHERE user_id=? AND date=?", (USER_ID, today)).fetchall()
+
+        if not missoes:
+            st.info("Nenhuma missão gerada para hoje. Recarregue a página se necessário.")
+        else:
+            # Descrições amigáveis
+            nomes = {
+                "quiz_normal": "Responder quizzes normais",
+                "quiz_primata": "Usar o Macaco Sábio",
+                "exportar_pdf": "Exportar PDFs",
+                "usar_continuacao": "Usar 'Quero saber mais'",
+                "comentar": "Comentar nas explicações"
+            }
+            for tipo, meta, prog, comp in missoes:
+                pct = min(prog / meta, 1.0)
+                st.markdown(f"""
+                <div class="mission-card" style="display:flex; align-items:center; gap:1rem;">
+                    <div style="font-size:2rem;">{'✅' if comp else '⬜'}</div>
+                    <div style="flex:1;">
+                        <strong>{nomes.get(tipo, tipo)}</strong>
+                        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
+                            <div style="flex:1; background:rgba(255,255,255,0.1); border-radius:10px; height:12px;">
+                                <div class="mission-progress" style="width:{pct*100}%;"></div>
+                            </div>
+                            <span>{prog}/{meta}</span>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if comp:
+                    st.caption(f"Recompensa: +15 XP já creditados!")
+
+    # Aba Progresso
+    with tabs[12]:
         st.subheader("📊 Progresso")
         data = load_user_data()
         c1,c2,c3 = st.columns(3)
@@ -631,7 +701,7 @@ def main_app():
             st.dataframe(df_top)
 
     # Aba Diário
-    with tabs[11]:
+    with tabs[13]:
         st.subheader("📅 Desafio Diário")
         data = load_user_data(); today = date.today().isoformat()
         if data["last_daily"] != today:
