@@ -410,8 +410,8 @@ if not st.session_state.logged_in:
 # ---------- Tela de login (com espaços para imagens) ----------
 def tela_login():
     # URLs de imagens personalizáveis (substitua pelas suas)
-    LOGO_URL = "https://imgur.com/cfSvLdE"        # ← coloque aqui a URL da sua logo
-    MASCOT_URL = "https://imgur.com/a/fAkm34l"   # ← coloque aqui a URL do mascote
+    LOGO_URL = "https://i.imgur.com/cfSvLdE.png"        # ← coloque aqui a URL da sua logo
+    MASCOT_URL = "https://i.imgur.com/dDnr8pn.png"   # ← coloque aqui a URL do mascote
 
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -751,7 +751,7 @@ def main_app():
 
     with st.sidebar:
         # Logo na sidebar (substitua pela sua URL)
-        LOGO_SIDEBAR_URL = "https://imgur.com/cfSvLdE"  # ← coloque aqui a URL da sua logo
+        LOGO_SIDEBAR_URL = "https://i.imgur.com/cfSvLdE.png"  # ← coloque aqui a URL da sua logo
         if LOGO_SIDEBAR_URL and "seu-logo" not in LOGO_SIDEBAR_URL:
             st.image(LOGO_SIDEBAR_URL, width=200)
         else:
