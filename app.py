@@ -246,13 +246,12 @@ USER_ID = st.session_state.user_id
 # Configurar cliente Groq
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# ---------- Funções de persistência ----------
+# ---------- Funções de persistência (CORRIGIDAS) ----------
 def load_user_data():
     row = conn.execute("SELECT * FROM user_data WHERE user_id = ?", (USER_ID,)).fetchone()
     if row:
-        # Garante compatibilidade com tabelas que podem não ter todas as colunas
-        colunas = [desc[0] for desc in conn.description]
-        data_dict = {
+        # Acessa os campos por índice (compatível com qualquer versão da tabela)
+        return {
             "user_id": row[0],
             "xp": row[1] if len(row) > 1 else 0,
             "streak": row[2] if len(row) > 2 else 0,
@@ -260,7 +259,6 @@ def load_user_data():
             "achievements": json.loads(row[4]) if len(row) > 4 and row[4] else [],
             "titulos": json.loads(row[5]) if len(row) > 5 and row[5] else []
         }
-        return data_dict
     else:
         default = {"user_id": USER_ID, "xp": 0, "streak": 0, "last_daily": None,
                    "achievements": [], "titulos": []}
@@ -535,9 +533,6 @@ def main_app():
         "🗺️ Mapa Mental", "⚖️ Debate", "📖 História", "🎵 Música",
         "✍️ Redação", "👨‍🏫 Professor", "📊 Progresso", "📅 Diário"
     ])
-
-    # As abas seguem exatamente como já estavam no código anterior (mantive todas as funcionalidades)
-    # Reproduzo aqui as abas 0 a 11, mas sem alterações.
 
     # Aba Estudar
     with tabs[0]:
