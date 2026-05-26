@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Titanium Edition com LOGIN e RANKING GLOBAL
+UltraLearn IA – Titanium Edition com LOGIN e RANKING GLOBAL (corrigido)
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib
@@ -101,7 +101,7 @@ try:
     conn.execute("ALTER TABLE user_data ADD COLUMN titulos TEXT DEFAULT '[]'")
     conn.commit()
 except:
-    pass  # já existe
+    pass
 
 conn.commit()
 
@@ -110,7 +110,6 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def criar_usuario(user_id, password, avatar="🧑", bio=""):
-    """Retorna True se criado com sucesso, False se já existir."""
     existente = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,)).fetchone()
     if existente:
         return False
@@ -123,7 +122,6 @@ def criar_usuario(user_id, password, avatar="🧑", bio=""):
     return True
 
 def login_usuario(user_id, password):
-    """Retorna True se a senha estiver correta."""
     row = conn.execute("SELECT password_hash FROM users WHERE user_id = ?", (user_id,)).fetchone()
     if not row:
         return False
@@ -240,17 +238,13 @@ if not st.session_state.logged_in:
     tela_login()
     st.stop()
 
-# Usuário logado
 USER_ID = st.session_state.user_id
-
-# Configurar cliente Groq
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# ---------- Funções de persistência (CORRIGIDAS) ----------
+# ---------- Funções de persistência ----------
 def load_user_data():
     row = conn.execute("SELECT * FROM user_data WHERE user_id = ?", (USER_ID,)).fetchone()
     if row:
-        # Acessa os campos por índice (compatível com qualquer versão da tabela)
         return {
             "user_id": row[0],
             "xp": row[1] if len(row) > 1 else 0,
@@ -403,13 +397,43 @@ def gen_historia_interativa(topic, context=None):
     return resp.choices[0].message.content.strip()
 
 def gen_mapa_mental(topic):
-    prompt = f"Crie um mapa mental JSON com 'nodes' (conceitos) e 'edges' (pares [origem,destino]) sobre '{topic}'. Apenas JSON."
+    prompt = f"Crie um mapa mental JSON com 'nodes' (array de strings, cada string é um conceito) e 'edges' (array de pares [origem,destino]) sobre '{topic}'. Apenas JSON. Exemplo: {{\"nodes\":[\"Física\",\"Mecânica\"],\"edges\":[[\"Física\",\"Mecânica\"]]}}"
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile",
         messages=[{"role":"user","content": prompt}], temperature=0.7, max_tokens=500)
     cont = resp.choices[0].message.content.strip()
     if cont.startswith("```"): cont = cont[cont.find("\n"):].rstrip("```").strip()
-    try: return json.loads(cont)
-    except: return None
+    try:
+        data = json.loads(cont)
+        # Normaliza nós: se forem dicionários, extrai 'name' ou o primeiro valor string
+        nodes = data.get("nodes", [])
+        normalized_nodes = []
+        for n in nodes:
+            if isinstance(n, str):
+                normalized_nodes.append(n)
+            elif isinstance(n, dict):
+                # Tenta pegar a chave 'name', 'label', 'id' ou o primeiro valor string
+                for key in ("name", "label", "id"):
+                    if key in n and isinstance(n[key], str):
+                        normalized_nodes.append(n[key])
+                        break
+                else:
+                    # Pega o primeiro valor string do dicionário
+                    first_str = next((v for v in n.values() if isinstance(v, str)), None)
+                    if first_str:
+                        normalized_nodes.append(first_str)
+                    else:
+                        normalized_nodes.append(str(n))  # fallback
+            else:
+                normalized_nodes.append(str(n))
+        # Normaliza arestas: cada aresta deve ser uma lista de duas strings
+        edges = data.get("edges", [])
+        normalized_edges = []
+        for e in edges:
+            if isinstance(e, list) and len(e) == 2:
+                normalized_edges.append([str(e[0]), str(e[1])])
+        return {"nodes": normalized_nodes, "edges": normalized_edges}
+    except:
+        return None
 
 def gen_musica(topic):
     prompt = f"Crie uma letra de música em português sobre '{topic}', com refrão e duas estrofes."
@@ -477,9 +501,8 @@ def text_to_speech(text):
     fp.seek(0)
     return fp
 
-# ---------- Interface principal (após login) ----------
+# ---------- Interface principal ----------
 def main_app():
-    # Inicializar estados da sessão
     session_defaults = {
         "explanation": "", "topic": "", "primata_explanation": "",
         "quiz_questions": [], "quiz_index": 0, "quiz_score": 0,
@@ -491,7 +514,6 @@ def main_app():
     for k, v in session_defaults.items():
         if k not in st.session_state: st.session_state[k] = v
 
-    # Sidebar
     with st.sidebar:
         st.markdown("## 👤 Meu Perfil")
         user_row = conn.execute("SELECT avatar, bio FROM users WHERE user_id = ?", (USER_ID,)).fetchone()
@@ -643,19 +665,25 @@ def main_app():
         if st.session_state.primata_explanation:
             st.markdown(f'<div class="primata-box">{st.session_state.primata_explanation}</div>', unsafe_allow_html=True)
 
-    # Aba Mapa Mental
+    # Aba Mapa Mental (com tratamento de erro melhorado)
     with tabs[4]:
         st.subheader("🗺️ Mapa Mental")
         mapa_topic = st.text_input("Tópico:", key="mapa")
         if st.button("Gerar Mapa") and mapa_topic:
-            data = gen_mapa_mental(mapa_topic)
-            if data:
-                g = graphviz.Digraph()
-                for node in data.get("nodes", []): g.node(node)
-                for edge in data.get("edges", []):
-                    if len(edge) == 2: g.edge(edge[0], edge[1])
-                st.graphviz_chart(g)
-            else: st.error("Não foi possível gerar o mapa mental.")
+            with st.spinner("Desenhando mapa..."):
+                data = gen_mapa_mental(mapa_topic)
+                if data and data["nodes"]:
+                    g = graphviz.Digraph()
+                    for node in data["nodes"]:
+                        if isinstance(node, str) and node.strip():
+                            g.node(node.strip())
+                    for edge in data["edges"]:
+                        if len(edge) == 2 and edge[0] and edge[1]:
+                            g.edge(str(edge[0]).strip(), str(edge[1]).strip())
+                    st.graphviz_chart(g)
+                else:
+                    st.error("Não foi possível gerar o mapa mental. Tente outro tópico.")
+                    st.info("A IA pode ter retornado um formato inválido.")
 
     # Aba Debate
     with tabs[5]:
@@ -738,7 +766,7 @@ def main_app():
                     st.session_state.prof_idx += 1; st.rerun()
             else: st.success("Aula concluída!")
 
-    # Aba Progresso
+    # Aba Progresso (com ranking global e correção)
     with tabs[10]:
         st.subheader("📊 Seu Progresso")
         data = load_user_data()
@@ -756,15 +784,17 @@ def main_app():
             fig = px.density_heatmap(df, x="Data", y="XP ganho", title="Atividade Diária")
             st.plotly_chart(fig)
 
+        # Ranking geral (todos os usuários, ordenados por XP total)
         ranking = conn.execute("""
-            SELECT user_id, SUM(xp_gained) as total_xp
-            FROM xp_log
-            WHERE date >= date('now','-7 days')
-            GROUP BY user_id ORDER BY total_xp DESC LIMIT 10
+            SELECT u.user_id, COALESCE(SUM(xp.xp_gained), 0) as total_xp
+            FROM users u
+            LEFT JOIN xp_log xp ON u.user_id = xp.user_id
+            GROUP BY u.user_id
+            ORDER BY total_xp DESC
         """).fetchall()
         if ranking:
-            st.subheader("🏅 Ranking Semanal (Top 10)")
-            df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP na Semana"])
+            st.subheader("🏅 Ranking Geral")
+            df_rank = pd.DataFrame(ranking, columns=["Usuário", "XP Total"])
             st.table(df_rank)
 
         top_topics = conn.execute("SELECT topic, SUM(quizzes) as total_quizzes, SUM(errors) as total_errors FROM topics WHERE user_id=? GROUP BY topic", (USER_ID,)).fetchall()
