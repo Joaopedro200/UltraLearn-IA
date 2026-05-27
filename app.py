@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Edição Completa com Correções Finais
+UltraLearn IA – Edição Completa com Correções Finais (incluindo sintaxe)
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid, time
@@ -329,7 +329,7 @@ def gen_debate(topic):
     return resp.choices[0].message.content.strip()
 def gen_historia_interativa(topic, context=None):
     prompt = f"Inicie uma história interativa sobre '{topic}' com 3 opções (A,B,C)." if context is None else f"Continue a história sobre '{topic}' baseado na escolha {context}. Dê 3 novas opções."
-    resp = client.chat completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":prompt}], temperature=0.9, max_tokens=600)
+    resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":prompt}], temperature=0.9, max_tokens=600)
     return resp.choices[0].message.content.strip()
 def gen_mapa_mental(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":f"Crie um mapa mental JSON com 'nodes' (array de strings) e 'edges' (pares [origem,destino]) sobre '{topic}'. Apenas JSON."}], temperature=0.7, max_tokens=500)
