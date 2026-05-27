@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Versão Estável (sem loja, com Macaco Banana e continuação acumulativa)
+UltraLearn IA – Versão Estável (todas as abas funcionais)
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid, time
@@ -474,7 +474,7 @@ def main_app():
             st.rerun()
         if st.session_state.quiz_active and st.session_state.quiz_questions: show_quiz(st.session_state.quiz_questions, st.session_state.quiz_mode)
 
-    # Aba Quiz (completa)
+    # Aba Quiz
     with tabs[2]:
         st.subheader("🧠 Modos de Quiz")
         mode = st.radio("Escolha:", ["Normal","Caótico (V/F)","Maratona de Revisão","Sobrevivência","Relâmpago"])
@@ -541,8 +541,119 @@ def main_app():
                     if cont: st.session_state.primata_explanation += "\n\n" + cont
                 st.rerun()
 
-    # Demais abas (Mapa Mental, Debate, História, Música, Redação, Professor, Progresso, Diário)
-    # ... (mantidas como na versão anterior, sem loja)
+    # Aba Mapa Mental
+    with tabs[4]:
+        st.subheader("🗺️ Mapa Mental")
+        mapa_topic = st.text_input("Tópico:", key="mapa")
+        if st.button("Gerar Mapa") and mapa_topic:
+            with st.spinner("Desenhando..."):
+                data = gen_mapa_mental(mapa_topic)
+                if data and data["nodes"]:
+                    g = graphviz.Digraph()
+                    for node in data["nodes"]: g.node(node)
+                    for edge in data["edges"]: g.edge(edge[0], edge[1])
+                    st.graphviz_chart(g)
+                else: st.error("Não foi possível gerar o mapa mental.")
+
+    # Aba Debate
+    with tabs[5]:
+        st.subheader("⚖️ Debate de Especialistas")
+        debate_topic = st.text_input("Tópico:", key="debate")
+        if st.button("Iniciar Debate") and debate_topic:
+            st.markdown(gen_debate(debate_topic))
+            c1,c2,c3 = st.columns(3)
+            with c1:
+                if st.button("👍 Prós"): st.success("Votou nos Prós!")
+            with c2:
+                if st.button("👎 Contras"): st.success("Votou nos Contras!")
+            with c3:
+                if st.button("🤝 Empate"): st.success("Empate!")
+
+    # Aba História Interativa
+    with tabs[6]:
+        st.subheader("📖 História Interativa")
+        hist_topic = st.text_input("Tema:", key="hist")
+        if st.button("Começar") and hist_topic:
+            st.session_state.story_state = {"text": gen_historia_interativa(hist_topic), "topic": hist_topic}; st.rerun()
+        if st.session_state.story_state:
+            st.write(st.session_state.story_state["text"])
+            c1,c2,c3 = st.columns(3)
+            with c1:
+                if st.button("Opção A"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "A"); st.rerun()
+            with c2:
+                if st.button("Opção B"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "B"); st.rerun()
+            with c3:
+                if st.button("Opção C"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "C"); st.rerun()
+            if st.button("Reiniciar"): st.session_state.story_state = None; st.rerun()
+
+    # Aba Música
+    with tabs[7]:
+        st.subheader("🎵 Gerador de Música de Estudo")
+        musica_topic = st.text_input("Tópico:", key="musica")
+        if st.button("Compor") and musica_topic: st.markdown(f"**Letra:**\n{gen_musica(musica_topic)}"); st.audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3")
+
+    # Aba Redação
+    with tabs[8]:
+        st.subheader("✍️ Redação Assistida")
+        red = st.text_area("Escreva:", height=200)
+        if st.button("Avaliar") and red: st.markdown(f"### Avaliação:\n{gen_redacao_avaliacao(red)}"); add_xp(15)
+
+    # Aba Professor vs Aluno
+    with tabs[9]:
+        st.subheader("👨‍🏫 Professor vs Aluno")
+        ptopic = st.text_input("Tópico:", key="prof_topic")
+        if st.button("Iniciar Aula") and ptopic:
+            exp = gen_explanation(ptopic); st.markdown(exp); st.session_state.topic = ptopic
+            st.session_state.prof_questions = gen_quiz(exp, "médio", 5); st.session_state.prof_idx = 0; st.rerun()
+        if st.session_state.prof_questions:
+            idx = st.session_state.prof_idx
+            if idx < len(st.session_state.prof_questions):
+                q = st.session_state.prof_questions[idx]; st.write(q['question'])
+                ans = st.text_input("Resposta:", key=f"prof_ans_{idx}")
+                if st.button("Enviar") and ans:
+                    if ans.strip().lower() == q['correct_answer'].lower(): st.success("Correto!"); add_xp(5)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}"); st.info(q['explanation'])
+                    st.session_state.prof_idx += 1; st.rerun()
+            else: st.success("Aula concluída!")
+
+    # Aba Progresso
+    with tabs[10]:
+        st.subheader("📊 Seu Progresso")
+        data = load_user_data()
+        c1,c2,c3 = st.columns(3)
+        c1.metric("XP", data["xp"]); c2.metric("Streak", data["streak"]); c3.metric("Títulos", len(data["titulos"]))
+        st.write("🏆 Conquistas:", ", ".join(data["achievements"]) if data["achievements"] else "Nenhuma")
+        logs = conn.execute("SELECT date, SUM(xp_gained) FROM xp_log WHERE user_id=? GROUP BY date ORDER BY date", (USER_ID,)).fetchall()
+        if logs:
+            df = pd.DataFrame(logs, columns=["Data","XP"]); df['Data'] = pd.to_datetime(df['Data'])
+            st.line_chart(df.set_index("Data"))
+        top_topics = conn.execute("SELECT topic, SUM(quizzes), SUM(errors) FROM topics WHERE user_id=? GROUP BY topic", (USER_ID,)).fetchall()
+        if top_topics:
+            df_top = pd.DataFrame(top_topics, columns=["Tópico","Quizzes","Erros"])
+            df_top["Taxa de Erro"] = df_top["Erros"] / df_top["Quizzes"] * 100
+            st.dataframe(df_top)
+
+    # Aba Diário
+    with tabs[11]:
+        st.subheader("📅 Desafio Diário")
+        data = load_user_data(); today = date.today().isoformat()
+        if data["last_daily"] != today:
+            daily = random.choice(["Inteligência Artificial","História do Brasil","Sistema Solar","Mitologia Grega"])
+            st.markdown(f"### Tópico do dia: **{daily}**")
+            if st.button("Gerar Quiz do Dia"): st.session_state.daily_questions = gen_quiz(gen_explanation(daily),"médio",3); st.session_state.daily_idx=0; st.rerun()
+        else: st.success(f"Desafio concluído! Streak: {data['streak']} dias")
+        if st.session_state.daily_questions:
+            idx = st.session_state.daily_idx
+            if idx < len(st.session_state.daily_questions):
+                q = st.session_state.daily_questions[idx]; st.write(q['question'])
+                ans = st.radio("Opções" if q["type"]=="multiple_choice" else "V/F", q['options'] if q["type"]=="multiple_choice" else ["Verdadeiro","Falso"], index=None, key=f"daily_{idx}")
+                if st.button("Responder Diário") and ans:
+                    user = ans.split('.')[0].strip() if q["type"]=="multiple_choice" else ("Verdadeiro" if ans=="Verdadeiro" else "Falso")
+                    if user == q['correct_answer']: st.success("Correto!"); add_xp(20)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}")
+                    st.session_state.daily_idx += 1
+                    if st.session_state.daily_idx >= len(st.session_state.daily_questions): update_daily_streak(); st.balloons(); st.success("Desafio diário concluído! +20 XP")
+                    st.rerun()
 
 if __name__ == "__main__":
     if st.session_state.logged_in: main_app()
