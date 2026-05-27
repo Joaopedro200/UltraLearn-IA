@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Premium Edition (Corrigido + Macaco Sábio Estilo Banana)
+UltraLearn IA – Edição Completa com Correções Finais
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid, time
@@ -278,41 +278,41 @@ def gen_resumo(text):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":f"Resuma: {text}"}], temperature=0.5, max_tokens=500)
     return resp.choices[0].message.content.strip()
 
-# 🆕 Função primata aprimorada (estilo banana/gorila)
 def gen_primata(topic, style="normal"):
     prompt = f"""
-Você é o Macaco Professor, um sábio da floresta que ensina qualquer assunto usando SOMENTE analogias com bananas, macacos, gorilas de silício (computadores), árvores, rios e situações hilárias da selva.
+Você é o Macaco Professor, um sábio da floresta que ensina sobre "{topic}" usando SOMENTE analogias com bananas, macacos, gorilas de silício (computadores), árvores, rios e situações hilárias da selva.
 
-Seu aluno é um jovem macaco que quer aprender sobre "{topic}". Seu objetivo é dar uma aula COMPLETA, DETALHADA e ENVOLVENTE, como se fosse um vídeo de 10 minutos. Siga este roteiro:
+Dê uma aula COMPLETA e ENVOLVENTE, como um vídeo de 10 minutos, seguindo este roteiro:
+1. Introdução que prenda a atenção, corrigindo ideias erradas sobre o assunto.
+2. Explique o conceito central com a analogia do "grande gorila de silício" (computador): forte mas burro, precisa de instruções exatas.
+3. Use bananas para representar dados. Variáveis são caixas etiquetadas onde guardamos bananas.
+4. Tipos de dados são tipos de bananas: inteira (inteiro), mordida (float), palavra escrita (string), etc.
+5. "Cacho de bananas" para listas/arrays, mostrando que o gorila conta a partir do zero.
+6. Decisões (if/else) como escolhas do macaco: "Se banana madura, coma; senão, espere".
+7. Loops (for, while) como repetir tarefas: "Enquanto houver bananas no cacho, descasque e coma".
+8. Funções como apelido para instruções: "preparar café da manhã" e o gorila faz tudo.
+9. Avise sobre loops infinitos (gorila comendo bananas para sempre até explodir) e bugs (situações que o macaco esqueceu).
+10. Encerre inspirando: a lógica é mais importante que decorar código, qualquer macaco pode ser arquiteto de bananas.
 
-1. Comece com uma introdução que prenda a atenção, falando que o aluno provavelmente tem ideias erradas sobre o assunto.
-2. Explique o conceito central usando a analogia do "grande gorila de silício" (computador) e como ele é forte mas muito burro, precisando de instruções exatas.
-3. Use bananas para representar dados, informações ou valores. Explique variáveis como caixas etiquetadas onde guardamos bananas.
-4. Explique tipos de dados como tipos de bananas (banana inteira = inteiro, banana mordida = float, palavra escrita = string, etc.).
-5. Use a ideia de "cacho de bananas" para listas/arrays, e mostre como o gorila conta a partir do zero.
-6. Explique decisões (if/else) como escolhas que o macaco faz: "Se a banana estiver madura, coma; senão, espere".
-7. Explique loops (for, while) como formas de repetir tarefas, como "enquanto houver bananas no cacho, descasque e coma".
-8. Explique funções como dar um apelido para um monte de instruções, tipo "preparar café da manhã" e o gorila faz tudo.
-9. Avise sobre perigos como loops infinitos (o gorila comendo bananas para sempre até explodir) ou bugs (situações que o macaco esqueceu de prever).
-10. Encerre com uma lição inspiradora: a lógica é mais importante que decorar código, e qualquer macaco pode aprender a pensar como um arquiteto de bananas.
-
-REGRAS DE OURO:
-- Use linguagem simples, como se estivesse falando com uma criança de 5 anos, mas sem deixar de ensinar a fundo.
-- FAÇA ANALOGIAS O TEMPO TODO. Nada de explicações secas ou técnicas.
-- Seja engraçado e use emojis de macaco 🐵, banana 🍌, gorila 🦍, etc.
-- Escreva PELO MENOS 8 parágrafos longos, cobrindo todos os aspectos importantes do tópico.
-- Não seja superficial. Explique como se estivesse realmente dando uma aula completa na floresta.
-- Use o estilo narrativo: "O macaco acha que...", "O gorila de silício...", "Imagine que você...", etc.
-
-Formato: apenas texto, sem markdown.
+Regras:
+- Linguagem simples, para uma criança de 5 anos, mas sem deixar de ensinar a fundo.
+- FAÇA ANALOGIAS O TEMPO TODO. Nada de explicações secas.
+- Use emojis 🐵🍌🦍.
+- Pelo menos 6 parágrafos longos.
+- Estilo narrativo: "O macaco acha que...", "O gorila de silício...", "Imagine que você...".
+- Responda em português, apenas texto, sem markdown.
 """
-    resp = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role":"user","content": prompt}],
-        temperature=0.9,
-        max_tokens=3000
-    )
-    return resp.choices[0].message.content.strip()
+    try:
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role":"user","content": prompt}],
+            temperature=0.9,
+            max_tokens=1500
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        st.error("O Macaco Sábio está descansando 🐵💤. Tente novamente em alguns segundos.")
+        return ""
 
 def gen_quiz(text, difficulty, num):
     dmap = {"fácil":"fácil","médio":"médio","difícil":"difícil"}
@@ -329,7 +329,7 @@ def gen_debate(topic):
     return resp.choices[0].message.content.strip()
 def gen_historia_interativa(topic, context=None):
     prompt = f"Inicie uma história interativa sobre '{topic}' com 3 opções (A,B,C)." if context is None else f"Continue a história sobre '{topic}' baseado na escolha {context}. Dê 3 novas opções."
-    resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":prompt}], temperature=0.9, max_tokens=600)
+    resp = client.chat completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":prompt}], temperature=0.9, max_tokens=600)
     return resp.choices[0].message.content.strip()
 def gen_mapa_mental(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":f"Crie um mapa mental JSON com 'nodes' (array de strings) e 'edges' (pares [origem,destino]) sobre '{topic}'. Apenas JSON."}], temperature=0.7, max_tokens=500)
@@ -345,7 +345,7 @@ def gen_musica(topic):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":f"Crie uma letra de música em português sobre '{topic}' com refrão e duas estrofes."}], temperature=0.9, max_tokens=500)
     return resp.choices[0].message.content.strip()
 
-# ---------- Componentes (inalterados) ----------
+# ---------- Componentes ----------
 def show_quiz(questions, mode="normal"):
     idx = st.session_state.get("quiz_index",0); total = len(questions)
     if mode=="sobrevivência":
@@ -545,7 +545,7 @@ def main_app():
             if st.session_state.quiz_active and st.session_state.quiz_questions: show_quiz(st.session_state.quiz_questions, "relâmpago")
             else: st.info("Gere um quiz primeiro.")
 
-    # Aba Primata (estilo banana/gorila)
+    # Aba Primata (estilo banana/gorila + continuação)
     with tabs[3]:
         st.subheader("🐵 Aprendendo como um Primata")
         st.image("https://i.imgur.com/dDnr8pn.png", width=300)
@@ -559,8 +559,192 @@ def main_app():
             if st.button("🧠 Quero saber mais (Macaco Sábio)"):
                 with st.spinner("Macaco aprofundando..."): st.session_state.primata_explanation += "\n\n" + gen_continuacao(st.session_state.topic, st.session_state.primata_explanation); st.rerun()
 
-    # As demais abas permanecem como estavam (Mapa Mental, Debate, etc.)
-    # ... (código das outras abas mantido igual ao anterior, sem alterações)
+    # Aba Mapa Mental
+    with tabs[4]:
+        st.subheader("🗺️ Mapa Mental")
+        mapa_topic = st.text_input("Tópico:", key="mapa")
+        if st.button("Gerar Mapa") and mapa_topic:
+            with st.spinner("Desenhando..."):
+                data = gen_mapa_mental(mapa_topic)
+                if data and data["nodes"]:
+                    g = graphviz.Digraph()
+                    for node in data["nodes"]: g.node(node)
+                    for edge in data["edges"]: g.edge(edge[0], edge[1])
+                    st.graphviz_chart(g)
+                else: st.error("Não foi possível gerar.")
+
+    # Aba Debate
+    with tabs[5]:
+        st.subheader("⚖️ Debate")
+        debate_topic = st.text_input("Tópico:", key="debate")
+        if st.button("Iniciar Debate") and debate_topic:
+            st.markdown(gen_debate(debate_topic))
+            c1,c2,c3 = st.columns(3)
+            with c1:
+                if st.button("👍 Prós"): st.success("Votou nos Prós!")
+            with c2:
+                if st.button("👎 Contras"): st.success("Votou nos Contras!")
+            with c3:
+                if st.button("🤝 Empate"): st.success("Empate!")
+
+    # Aba História Interativa
+    with tabs[6]:
+        st.subheader("📖 História Interativa")
+        hist_topic = st.text_input("Tema:", key="hist")
+        if st.button("Começar") and hist_topic:
+            st.session_state.story_state = {"text": gen_historia_interativa(hist_topic), "topic": hist_topic}; st.rerun()
+        if st.session_state.story_state:
+            st.write(st.session_state.story_state["text"])
+            c1,c2,c3 = st.columns(3)
+            with c1:
+                if st.button("Opção A"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "A"); st.rerun()
+            with c2:
+                if st.button("Opção B"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "B"); st.rerun()
+            with c3:
+                if st.button("Opção C"): st.session_state.story_state["text"] = gen_historia_interativa(st.session_state.story_state["topic"], "C"); st.rerun()
+            if st.button("Reiniciar"): st.session_state.story_state = None; st.rerun()
+
+    # Aba Música
+    with tabs[7]:
+        st.subheader("🎵 Música")
+        musica_topic = st.text_input("Tópico:", key="musica")
+        if st.button("Compor") and musica_topic: st.markdown(f"**Letra:**\n{gen_musica(musica_topic)}"); st.audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3")
+
+    # Aba Redação
+    with tabs[8]:
+        st.subheader("✍️ Redação")
+        red = st.text_area("Escreva:", height=200)
+        if st.button("Avaliar") and red: st.markdown(f"### Avaliação:\n{gen_redacao_avaliacao(red)}"); add_xp(15)
+
+    # Aba Professor (com continuação)
+    with tabs[9]:
+        st.subheader("👨‍🏫 Professor vs Aluno")
+        ptopic = st.text_input("Tópico:", key="prof_topic")
+        if st.button("Iniciar Aula") and ptopic:
+            exp = gen_explanation(ptopic); st.markdown(exp); st.session_state.topic = ptopic
+            st.session_state.prof_questions = gen_quiz(exp, "médio", 5); st.session_state.prof_idx = 0; st.rerun()
+        if st.session_state.prof_questions:
+            idx = st.session_state.prof_idx
+            if idx < len(st.session_state.prof_questions):
+                q = st.session_state.prof_questions[idx]; st.write(q['question'])
+                ans = st.text_input("Resposta:", key=f"prof_ans_{idx}")
+                if st.button("Enviar") and ans:
+                    if ans.strip().lower() == q['correct_answer'].lower(): st.success("Correto!"); add_xp(5)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}"); st.info(q['explanation'])
+                    st.session_state.prof_idx += 1; st.rerun()
+            else: st.success("Aula concluída!")
+
+    # Aba Loja
+    with tabs[10]:
+        st.subheader("🛒 Loja de Personalização")
+        data = load_user_data()
+        tab_av, tab_fr = st.tabs(["👤 Avatares", "🖼️ Molduras"])
+        with tab_av:
+            st.markdown("### Avatares Disponíveis")
+            avatares = data["unlocked_avatars"]
+            shop_av = conn.execute("SELECT avatar, price FROM avatar_shop WHERE avatar NOT IN (SELECT value FROM json_each(?))", (json.dumps(avatares),)).fetchall()
+            if shop_av:
+                cols = st.columns(3)
+                for i, (av, price) in enumerate(shop_av):
+                    with cols[i % 3]:
+                        st.markdown(f"<div style='text-align:center; font-size:3rem;'>{av}</div>", unsafe_allow_html=True)
+                        if st.button(f"Comprar ({price} XP)", key=f"shop_av_{av}"):
+                            ok, msg = comprar_item("avatar", av)
+                            if ok: st.success(msg); st.rerun()
+                            else: st.error(msg)
+            else:
+                st.info("🎉 Todos os avatares já foram desbloqueados!")
+        with tab_fr:
+            st.markdown("### Molduras Disponíveis")
+            frames_unlocked = data["unlocked_frames"]
+            frame_eq = data["frame_equipped"]
+            st.markdown(f"**Moldura equipada:** {frame_eq}")
+            shop_fr = conn.execute("SELECT frame, price FROM frame_shop WHERE frame NOT IN (SELECT value FROM json_each(?))", (json.dumps(frames_unlocked),)).fetchall()
+            if shop_fr:
+                cols = st.columns(3)
+                for i, (fr, price) in enumerate(shop_fr):
+                    with cols[i % 3]:
+                        st.markdown(f"<div class='moldura moldura-{fr}' style='text-align:center; font-size:2rem;'>{fr}</div>", unsafe_allow_html=True)
+                        if st.button(f"Comprar ({price} XP)", key=f"shop_fr_{fr}"):
+                            ok, msg = comprar_item("frame", fr)
+                            if ok: st.success(msg); st.rerun()
+                            else: st.error(msg)
+            else:
+                st.info("🎉 Todas as molduras já foram desbloqueadas!")
+            st.markdown("---")
+            st.markdown("### Equipar Moldura")
+            if len(frames_unlocked) > 1:
+                nova = st.selectbox("Escolha a moldura para equipar", frames_unlocked, index=frames_unlocked.index(frame_eq) if frame_eq in frames_unlocked else 0)
+                if nova != frame_eq:
+                    if st.button("Equipar"):
+                        equipar_moldura(nova); st.rerun()
+
+    # Aba Missões
+    with tabs[11]:
+        st.subheader("🎯 Missões Diárias")
+        today = date.today().isoformat()
+        missoes = conn.execute("SELECT mission_type, goal, progress, completed FROM missions WHERE user_id=? AND date=?", (USER_ID, today)).fetchall()
+        if not missoes:
+            st.info("Nenhuma missão gerada para hoje.")
+        else:
+            nomes = {"quiz_normal":"Responder quizzes normais","quiz_primata":"Usar o Macaco Sábio","exportar_pdf":"Exportar PDFs","usar_continuacao":"Usar 'Quero saber mais'","comentar":"Comentar nas explicações"}
+            for tipo, meta, prog, comp in missoes:
+                pct = min(prog / meta, 1.0)
+                st.markdown(f"""
+                <div class="mission-card" style="display:flex; align-items:center; gap:1rem;">
+                    <div style="font-size:2rem;">{'✅' if comp else '⬜'}</div>
+                    <div style="flex:1;">
+                        <strong>{nomes.get(tipo, tipo)}</strong>
+                        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
+                            <div style="flex:1; background:rgba(255,255,255,0.1); border-radius:10px; height:12px;">
+                                <div class="mission-progress" style="width:{pct*100}%;"></div>
+                            </div>
+                            <span>{prog}/{meta}</span>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if comp:
+                    st.caption(f"Recompensa: +15 XP já creditados!")
+
+    # Aba Progresso
+    with tabs[12]:
+        st.subheader("📊 Progresso")
+        data = load_user_data()
+        c1,c2,c3 = st.columns(3)
+        c1.metric("XP", data["xp"]); c2.metric("Streak", data["streak"]); c3.metric("Títulos", len(data["titulos"]))
+        st.write("🏆 Conquistas:", ", ".join(data["achievements"]) if data["achievements"] else "Nenhuma")
+        logs = conn.execute("SELECT date, SUM(xp_gained) FROM xp_log WHERE user_id=? GROUP BY date ORDER BY date", (USER_ID,)).fetchall()
+        if logs:
+            df = pd.DataFrame(logs, columns=["Data","XP"]); df['Data'] = pd.to_datetime(df['Data'])
+            st.line_chart(df.set_index("Data"))
+        top_topics = conn.execute("SELECT topic, SUM(quizzes), SUM(errors) FROM topics WHERE user_id=? GROUP BY topic", (USER_ID,)).fetchall()
+        if top_topics:
+            df_top = pd.DataFrame(top_topics, columns=["Tópico","Quizzes","Erros"])
+            df_top["Taxa de Erro"] = df_top["Erros"] / df_top["Quizzes"] * 100
+            st.dataframe(df_top)
+
+    # Aba Diário
+    with tabs[13]:
+        st.subheader("📅 Desafio Diário")
+        data = load_user_data(); today = date.today().isoformat()
+        if data["last_daily"] != today:
+            daily = random.choice(["Inteligência Artificial","História do Brasil","Sistema Solar","Mitologia Grega"])
+            st.markdown(f"### Tópico do dia: **{daily}**")
+            if st.button("Gerar Quiz do Dia"): st.session_state.daily_questions = gen_quiz(gen_explanation(daily),"médio",3); st.session_state.daily_idx=0; st.rerun()
+        else: st.success(f"Desafio concluído! Streak: {data['streak']} dias")
+        if st.session_state.daily_questions:
+            idx = st.session_state.daily_idx
+            if idx < len(st.session_state.daily_questions):
+                q = st.session_state.daily_questions[idx]; st.write(q['question'])
+                ans = st.radio("Opções" if q["type"]=="multiple_choice" else "V/F", q['options'] if q["type"]=="multiple_choice" else ["Verdadeiro","Falso"], index=None, key=f"daily_{idx}")
+                if st.button("Responder Diário") and ans:
+                    user = ans.split('.')[0].strip() if q["type"]=="multiple_choice" else ("Verdadeiro" if ans=="Verdadeiro" else "Falso")
+                    if user == q['correct_answer']: st.success("Correto!"); add_xp(20)
+                    else: st.error(f"Errado. Resposta: {q['correct_answer']}")
+                    st.session_state.daily_idx += 1
+                    if st.session_state.daily_idx >= len(st.session_state.daily_questions): update_daily_streak(); st.balloons(); st.success("Desafio diário concluído! +20 XP")
+                    st.rerun()
 
 if __name__ == "__main__":
     if st.session_state.logged_in: main_app()
