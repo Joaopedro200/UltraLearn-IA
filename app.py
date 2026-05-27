@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UltraLearn IA – Edição Final Corrigida (RateLimit tratado em todas as funções)
+UltraLearn IA – Versão Estável (sem loja, com Macaco Banana e continuação acumulativa)
 """
 import streamlit as st
 import json, os, random, io, base64, hashlib, uuid, time
@@ -39,7 +39,7 @@ conn.sync()
 # ---------- Criação das tabelas ----------
 conn.execute("PRAGMA foreign_keys = ON")
 conn.execute("""CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, password_hash TEXT NOT NULL, avatar TEXT DEFAULT '🧑', bio TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')))""")
-conn.execute("""CREATE TABLE IF NOT EXISTS user_data (user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, last_daily TEXT, achievements TEXT DEFAULT '[]', titulos TEXT DEFAULT '[]', unlocked_avatars TEXT DEFAULT '["🧑"]', unlocked_frames TEXT DEFAULT '["⬜"]', frame_equipped TEXT DEFAULT '⬜')""")
+conn.execute("""CREATE TABLE IF NOT EXISTS user_data (user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, last_daily TEXT, achievements TEXT DEFAULT '[]', titulos TEXT DEFAULT '[]')""")
 conn.execute("""CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, question TEXT, type TEXT, options TEXT, correct_answer TEXT, explanation TEXT, interval INTEGER DEFAULT 1, ease_factor REAL DEFAULT 2.5, next_review TEXT)""")
 conn.execute("""CREATE TABLE IF NOT EXISTS xp_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, date TEXT, xp_gained INTEGER)""")
 conn.execute("""CREATE TABLE IF NOT EXISTS topics (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, topic TEXT, quizzes INTEGER DEFAULT 0, errors INTEGER DEFAULT 0)""")
@@ -47,32 +47,10 @@ conn.execute("""CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, quiz
 conn.execute("""CREATE TABLE IF NOT EXISTS auth_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires TEXT NOT NULL)""")
 conn.execute("""CREATE TABLE IF NOT EXISTS missions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, date TEXT, mission_type TEXT, goal INTEGER DEFAULT 0, progress INTEGER DEFAULT 0, completed INTEGER DEFAULT 0)""")
 conn.execute("""CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, topic TEXT, content TEXT, created_at TEXT DEFAULT (datetime('now')))""")
-conn.execute("""CREATE TABLE IF NOT EXISTS avatar_shop (avatar TEXT PRIMARY KEY, price INTEGER DEFAULT 0)""")
-conn.execute("""CREATE TABLE IF NOT EXISTS frame_shop (frame TEXT PRIMARY KEY, price INTEGER DEFAULT 0)""")
-
-# Popula lojas
-for avatar, price in [("🧑",0),("👩",0),("👨",0),("🐵",50),("🦊",80),("🐱",80),("🐶",80),("👽",120),("🐉",200),("👑",500)]:
-    if not conn.execute("SELECT avatar FROM avatar_shop WHERE avatar = ?", (avatar,)).fetchone():
-        conn.execute("INSERT INTO avatar_shop (avatar, price) VALUES (?,?)", (avatar, price))
-for frame, price in [("⬜",0),("🟦",50),("🟩",80),("🟨",80),("🟪",100),("🟧",100),("🔲",150),("🏁",200),("💠",300),("🌀",500)]:
-    if not conn.execute("SELECT frame FROM frame_shop WHERE frame = ?", (frame,)).fetchone():
-        conn.execute("INSERT INTO frame_shop (frame, price) VALUES (?,?)", (frame, price))
 
 # Migrações
 try:
     conn.execute("ALTER TABLE user_data ADD COLUMN titulos TEXT DEFAULT '[]'")
-    conn.commit()
-except: pass
-try:
-    conn.execute("ALTER TABLE user_data ADD COLUMN unlocked_avatars TEXT DEFAULT '[\"🧑\"]'")
-    conn.commit()
-except: pass
-try:
-    conn.execute("ALTER TABLE user_data ADD COLUMN unlocked_frames TEXT DEFAULT '[\"⬜\"]'")
-    conn.commit()
-except: pass
-try:
-    conn.execute("ALTER TABLE user_data ADD COLUMN frame_equipped TEXT DEFAULT '⬜'")
     conn.commit()
 except: pass
 
@@ -131,8 +109,8 @@ def inject_css(theme="dark", font_size=16, daltonic=None):
     .main-header {{background: {t["header_bg"]}; padding: 2.5rem 2rem; border-radius: 32px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 40px -20px rgba(0,0,0,0.4); backdrop-filter: blur(20px); position: relative; overflow: hidden;}}
     .main-header::before {{content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); animation: rotate 20s linear infinite;}}
     @keyframes rotate {{from {{transform: rotate(0deg);}} to {{transform: rotate(360deg);}}}}
-    .explanation-box, .quiz-card, .debate-card, .primata-box, .mission-card, .shop-card {{background: {t["card_bg"]}; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 2rem; margin: 1.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.3s ease;}}
-    .quiz-card:hover, .explanation-box:hover, .shop-card:hover {{transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.5);}}
+    .explanation-box, .quiz-card, .debate-card, .primata-box, .mission-card {{background: {t["card_bg"]}; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 2rem; margin: 1.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.3s ease;}}
+    .quiz-card:hover, .explanation-box:hover {{transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.5);}}
     div.stButton > button {{border-radius: 14px; font-weight: 600; padding: 0.7rem 2.5rem; border: none; background: {t["button_bg"]}; color: white; letter-spacing: 0.5px; text-transform: uppercase; font-size: 0.9rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3);}}
     div.stButton > button:hover {{transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.4);}}
     .feedback-correct {{background: rgba(34,197,94,0.15); border-left: 4px solid #22c55e; padding: 1rem; border-radius: 12px; margin: 1rem 0; color: #bbf7d0;}}
@@ -142,12 +120,6 @@ def inject_css(theme="dark", font_size=16, daltonic=None):
     .stTabs [data-baseweb="tab-list"] {{gap: 0.5rem; background: transparent; border-bottom: 2px solid rgba(255,255,255,0.1);}}
     .stTabs [data-baseweb="tab"] {{color: {t["text_color"]}; font-weight: 500; border-radius: 12px 12px 0 0; padding: 0.6rem 1.2rem;}}
     .stTabs [aria-selected="true"] {{background: {t["accent"]} !important; color: white !important;}}
-    .moldura {{display: inline-block; padding: 5px; border-radius: 16px;}}
-    .moldura-⬜ {{border: 2px solid #e2e8f0;}} .moldura-🟦 {{border: 3px solid #3b82f6; box-shadow: 0 0 10px #3b82f6;}}
-    .moldura-🟩 {{border: 3px solid #22c55e; box-shadow: 0 0 10px #22c55e;}} .moldura-🟨 {{border: 3px solid #eab308; box-shadow: 0 0 10px #eab308;}}
-    .moldura-🟪 {{border: 3px solid #a855f7; box-shadow: 0 0 10px #a855f7;}} .moldura-🟧 {{border: 3px solid #f97316; box-shadow: 0 0 10px #f97316;}}
-    .moldura-🔲 {{border: 3px dashed #cbd5e1;}} .moldura-🏁 {{border: 4px double #ffffff;}}
-    .moldura-💠 {{border: 3px dotted #06b6d4;}} .moldura-🌀 {{border: 3px solid; border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1) 1;}}
     .mission-progress {{height: 10px; border-radius: 10px; background: {t["accent"]};}}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
     </style>""", unsafe_allow_html=True)
@@ -199,8 +171,8 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 def load_user_data():
     row = conn.execute("SELECT * FROM user_data WHERE user_id = ?", (USER_ID,)).fetchone()
     if row:
-        return {"user_id":row[0],"xp":row[1],"streak":row[2],"last_daily":row[3],"achievements":json.loads(row[4]) if row[4] else [],"titulos":json.loads(row[5]) if len(row)>5 and row[5] else [],"unlocked_avatars":json.loads(row[6]) if len(row)>6 and row[6] else ["🧑"],"unlocked_frames":json.loads(row[7]) if len(row)>7 and row[7] else ["⬜"],"frame_equipped":row[8] if len(row)>8 and row[8] else "⬜"}
-    default = {"user_id":USER_ID,"xp":0,"streak":0,"last_daily":None,"achievements":[],"titulos":[],"unlocked_avatars":["🧑"],"unlocked_frames":["⬜"],"frame_equipped":"⬜"}
+        return {"user_id":row[0],"xp":row[1],"streak":row[2],"last_daily":row[3],"achievements":json.loads(row[4]) if row[4] else [],"titulos":json.loads(row[5]) if len(row)>5 and row[5] else []}
+    default = {"user_id":USER_ID,"xp":0,"streak":0,"last_daily":None,"achievements":[],"titulos":[]}
     conn.execute("INSERT INTO user_data(user_id) VALUES (?)", (USER_ID,)); conn.commit()
     return default
 def save_user_data(updates):
@@ -253,20 +225,8 @@ def atualizar_progresso_missao(tipo, inc=1):
     conn.execute("UPDATE missions SET progress=progress+? WHERE user_id=? AND date=? AND mission_type=? AND completed=0",(inc,USER_ID,today,tipo)); conn.commit()
     m = conn.execute("SELECT id,goal,progress FROM missions WHERE user_id=? AND date=? AND mission_type=? AND completed=0",(USER_ID,today,tipo)).fetchone()
     if m and m[2]>=m[1]: conn.execute("UPDATE missions SET completed=1 WHERE id=?",(m[0],)); conn.commit(); add_xp(15); st.toast(f"🎯 Missão concluída: {tipo}!")
-def comprar_item(tipo, item):
-    d = load_user_data()
-    if tipo=="avatar": shop, col, unlocked = "avatar_shop", "avatar", "unlocked_avatars"
-    else: shop, col, unlocked = "frame_shop", "frame", "unlocked_frames"
-    price = conn.execute(f"SELECT price FROM {shop} WHERE {col}=?",(item,)).fetchone()
-    if not price: return False, "Item não encontrado."
-    price = price[0]
-    if item in d[unlocked]: return False, "Você já possui este item."
-    if d["xp"] < price: return False, f"XP insuficiente. Precisa de {price} XP."
-    save_user_data({"xp":d["xp"]-price, unlocked:json.dumps(d[unlocked]+[item])})
-    return True, f"{'Avatar' if tipo=='avatar' else 'Moldura'} {item} adquirido!"
-def equipar_moldura(frame): save_user_data({"frame_equipped":frame})
 
-# ---------- IA (todas com tratamento de erro e tokens reduzidos) ----------
+# ---------- IA (com tratamento de erro) ----------
 def safe_api_call(func, fallback=""):
     try:
         return func()
@@ -433,12 +393,7 @@ def main_app():
         st.markdown("## 👤 Meu Perfil")
         user_row = conn.execute("SELECT avatar, bio FROM users WHERE user_id=?",(USER_ID,)).fetchone()
         avatar, bio = user_row if user_row else ("🧑","")
-        data = load_user_data()
-        avatares = data["unlocked_avatars"]
-        av_sel = st.selectbox("Avatar", avatares, index=avatares.index(avatar) if avatar in avatares else 0)
-        if av_sel != avatar: conn.execute("UPDATE users SET avatar=? WHERE user_id=?",(av_sel,USER_ID)); conn.commit(); st.rerun()
-        frame_eq = data["frame_equipped"]
-        st.markdown(f'<div class="moldura moldura-{frame_eq}"><span style="font-size:3rem;">{av_sel}</span></div>', unsafe_allow_html=True)
+        st.markdown(f"### {avatar} {USER_ID}")
         st.write(bio)
         if st.button("🚪 Sair"):
             t = cookies.get("ultralearn_token")
@@ -474,8 +429,7 @@ def main_app():
     tabs = st.tabs([
         "📖 Estudar","🎓 Aula Completa","🧠 Quiz","🐵 Primata",
         "🗺️ Mapa Mental","⚖️ Debate","📖 História","🎵 Música",
-        "✍️ Redação","👨‍🏫 Professor","🛒 Loja","🎯 Missões",
-        "📊 Progresso","📅 Diário"
+        "✍️ Redação","👨‍🏫 Professor","📊 Progresso","📅 Diário"
     ])
 
     # Aba Estudar
@@ -503,7 +457,7 @@ def main_app():
             if st.button("🧠 Quero saber mais"):
                 with st.spinner("Aprofundando..."):
                     cont = gen_continuacao(st.session_state.topic, st.session_state.explanation)
-                    if cont: st.session_state.explanation+="\n\n"+cont; atualizar_progresso_missao("usar_continuacao")
+                    if cont: st.session_state.explanation += "\n\n" + cont; atualizar_progresso_missao("usar_continuacao")
                 st.rerun()
             if st.button("Gerar Resumão"): st.markdown(f"**Resumo:** {gen_resumo(st.session_state.explanation)}")
             d = st.selectbox("Dificuldade", ["Fácil","Médio","Difícil"], index=1); n = st.number_input("Perguntas",1,20,5)
@@ -520,7 +474,7 @@ def main_app():
             st.rerun()
         if st.session_state.quiz_active and st.session_state.quiz_questions: show_quiz(st.session_state.quiz_questions, st.session_state.quiz_mode)
 
-    # Aba Quiz
+    # Aba Quiz (completa)
     with tabs[2]:
         st.subheader("🧠 Modos de Quiz")
         mode = st.radio("Escolha:", ["Normal","Caótico (V/F)","Maratona de Revisão","Sobrevivência","Relâmpago"])
@@ -570,7 +524,7 @@ def main_app():
             if st.session_state.quiz_active and st.session_state.quiz_questions: show_quiz(st.session_state.quiz_questions, "relâmpago")
             else: st.info("Gere um quiz primeiro.")
 
-    # Aba Primata (com continuação segura)
+    # Aba Primata (estilo banana + continuação acumulativa)
     with tabs[3]:
         st.subheader("🐵 Aprendendo como um Primata")
         st.image("https://i.imgur.com/dDnr8pn.png", width=300)
@@ -587,8 +541,8 @@ def main_app():
                     if cont: st.session_state.primata_explanation += "\n\n" + cont
                 st.rerun()
 
-    # As demais abas permanecem as mesmas (Mapa Mental, Debate, etc.)
-    # ... (código mantido sem alterações)
+    # Demais abas (Mapa Mental, Debate, História, Música, Redação, Professor, Progresso, Diário)
+    # ... (mantidas como na versão anterior, sem loja)
 
 if __name__ == "__main__":
     if st.session_state.logged_in: main_app()
