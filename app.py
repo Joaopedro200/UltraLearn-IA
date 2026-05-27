@@ -276,8 +276,39 @@ def gen_resumo(text):
     resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":f"Resuma: {text}"}], temperature=0.5, max_tokens=500)
     return resp.choices[0].message.content.strip()
 def gen_primata(topic, style="normal"):
-    prompts = {"normal":f"Macaco professor explica '{topic}' em português, aula completa e divertida, 5+ parágrafos.","rapper":f"Macaco rapper explica '{topic}' em forma de rap.","conspiracy":f"Macaco conspirador explica '{topic}' como teoria da conspiração.","shakespeare":f"Macaco shakesperiano explica '{topic}' em português arcaico.","standup":f"Macaco comediante faz stand-up sobre '{topic}'.","eli5":f"Explique '{topic}' como se eu fosse uma criança de 5 anos.","poesia":f"Macaco poeta explica '{topic}' em forma de poesia rimada."}
-    resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role":"user","content":prompts.get(style,prompts["normal"])}], temperature=0.9, max_tokens=2500)
+    # Estilo base "normal" agora é a explicação completa no estilo banana/gorila
+    prompt = f"""
+Você é o Macaco Professor, um sábio da floresta que ensina qualquer assunto usando SOMENTE analogias com bananas, macacos, gorilas de silício (computadores), árvores, rios e situações hilárias da selva.
+
+Seu aluno é um jovem macaco que quer aprender sobre "{topic}". Seu objetivo é dar uma aula COMPLETA, DETALHADA e ENVOLVENTE, como se fosse um vídeo de 10 minutos. Siga este roteiro:
+
+1. Comece com uma introdução que prenda a atenção, falando que o aluno provavelmente tem ideias erradas sobre o assunto.
+2. Explique o conceito central usando a analogia do "grande gorila de silício" (computador) e como ele é forte mas muito burro, precisando de instruções exatas.
+3. Use bananas para representar dados, informações ou valores. Explique variáveis como caixas etiquetadas onde guardamos bananas.
+4. Explique tipos de dados como tipos de bananas (banana inteira = inteiro, banana mordida = float, palavra escrita = string, etc.).
+5. Use a ideia de "cacho de bananas" para listas/arrays, e mostre como o gorila conta a partir do zero.
+6. Explique decisões (if/else) como escolhas que o macaco faz: "Se a banana estiver madura, coma; senão, espere".
+7. Explique loops (for, while) como formas de repetir tarefas, como "enquanto houver bananas no cacho, descasque e coma".
+8. Explique funções como dar um apelido para um monte de instruções, tipo "preparar café da manhã" e o gorila faz tudo.
+9. Avise sobre perigos como loops infinitos (o gorila comendo bananas para sempre até explodir) ou bugs (situações que o macaco esqueceu de prever).
+10. Encerre com uma lição inspiradora: a lógica é mais importante que decorar código, e qualquer macaco pode aprender a pensar como um arquiteto de bananas.
+
+REGRAS DE OURO:
+- Use linguagem simples, como se estivesse falando com uma criança de 5 anos, mas sem deixar de ensinar a fundo.
+- FAÇA ANALOGIAS O TEMPO TODO. Nada de explicações secas ou técnicas.
+- Seja engraçado e use emojis de macaco 🐵, banana 🍌, gorila 🦍, etc.
+- Escreva PELO MENOS 8 parágrafos longos, cobrindo todos os aspectos importantes do tópico.
+- Não seja superficial. Explique como se estivesse realmente dando uma aula completa na floresta.
+- Use o estilo narrativo: "O macaco acha que...", "O gorila de silício...", "Imagine que você...", etc.
+
+Formato: apenas texto, sem markdown.
+"""
+    resp = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content": prompt}],
+        temperature=0.9,
+        max_tokens=3000  # aumentado para explicações mais longas
+    )
     return resp.choices[0].message.content.strip()
 def gen_quiz(text, difficulty, num):
     dmap = {"fácil":"fácil","médio":"médio","difícil":"difícil"}
